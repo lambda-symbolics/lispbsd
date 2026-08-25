@@ -1,0 +1,3445 @@
+#+TITLE: Lisp Machine Project: Architecture and Technical Specification
+#+SUBTITLE: A live Common Lisp operating environment on the NetBSD kernel
+#+DATE: 2026-08-25
+#+LANGUAGE: en
+#+OPTIONS: toc:4 num:t ^:nil
+#+STARTUP: overview
+
+* Status and intent
+
+This document is a design specification for a new repository and a new system.  It consolidates the architecture discussed for a modern Lisp machine built above the NetBSD kernel, with a live Common Lisp world as the user-visible operating environment and an optional resident reasoning agent.
+
+The project is independent of Autolith.  Autolith may be embedded as one implementation of the resident agent protocol, and several of its mechanisms are useful prior art, but this system is not an Autolith subproject and its architecture is not subordinate to Autolith's repository layout, package structure, supported hosts, or current implementation choices.
+
+The specification is intentionally ambitious.  It defines the semantic target first and permits staged implementation underneath it.
+
+Normative words have their conventional meanings:
+
+- =MUST= identifies an invariant required for the system to count as this design.
+- =SHOULD= identifies a strong default that may be departed from for a concrete technical reason.
+- =MAY= identifies an implementation choice.
+- "The Machine" means the complete user-visible Lisp environment described here.
+- "The substrate" means the Common Lisp implementation, NetBSD interface layer, and NetBSD kernel that make the Machine possible.
+- "The world" means the live Lisp object universe that constitutes the primary system environment.
+- "Autolith" means the existing independent agent project, when discussed as an optional embedded component.
+
+* Executive specification
+
+The Machine is a personal, live, inspectable Common Lisp operating environment.  It runs above the NetBSD kernel and uses NetBSD for hardware enablement, virtual memory, scheduling primitives, filesystems, networking, device drivers, and other mechanisms that are expensive and uninteresting to reinvent for the purposes of this project.
+
+The Machine does not present NetBSD, POSIX, processes, file descriptors, shell commands, configuration files, or daemon conventions as its primary ontology.  These remain available below an abstraction horizon and through explicit compatibility facilities.
+
+The primary ontology is a graph of Lisp objects inside a live world.  System resources, activities, devices, services, windows, users or sessions, source definitions, compiler state, network connections, storage volumes, scheduled work, diagnostic events, and agent interactions are represented as typed Lisp objects with documented protocols.
+
+The compiler, debugger, inspector, editor, source database, condition system, restart system, administration tools, window system, and ordinary applications are parts of the same environment.  Programming and system administration are therefore different uses of the same reflective mechanisms rather than separate tool universes joined by text files and shell commands.
+
+The Machine has one integrated world by default.  Activities normally share Lisp objects and communicate directly through object references and protocols.  Strong isolation is available deliberately as an "island" mechanism for untrusted code, foreign binaries, fault containment, incompatible runtimes, and experiments.  Isolation is an implementation and authority boundary, not the default semantic model for applications.
+
+Persistence is broader than a heap image.  Saved worlds, source identity, implementation identity, NetBSD identity, durable mutation history, reconstructible definition changes, persistent application objects, user history, and exact checkpoint generations are recorded separately enough that the environment can be reconstructed rather than depending on a single opaque memory dump.
+
+A separate recovery world MUST be capable of booting without the active world, network access, an LLM provider, or Autolith.  It can inspect generations, source, mutation history, crash evidence, and persistent state, and can restore or reconstruct a known-good world.
+
+The resident agent is optional.  The system defines a protocol for an agent activity with constrained semantic access to world objects.  Autolith may implement this protocol.  The agent is never the root object or the ontological center of the Machine.  It is a participant inside the world, analogous to a highly capable combination of listener assistant, inspector, debugger assistant, operator, and programmer's assistant.  Deterministic Lisp code defines machine semantics; the agent supplies reasoning and judgment through those semantics.
+
+The canonical user interface is a black-and-white, bitmap-oriented desktop inspired directly by Xerox PARC Interlisp-D and Medley.  It uses overlapping windows, mouse-driven menus, Lisp Exec/listener windows, source and structure editors, inspectors, browsers, break/debugger windows, object-aware presentations, and a deliberately monochrome visual vocabulary.  This UI is part of the Machine's identity, not a theme over a conventional desktop.
+
+The display system operates on a canonical 1-bit logical framebuffer and Lisp-level window/presentation model.  A native NetBSD display/input backend is preferred.  A Wayland backend MAY host the entire Lisp desktop in one or a small number of ordinary Wayland surfaces for convenience.  Wayland compatibility does not define the Machine's window model.
+
+The Common Lisp implementation is a replaceable runtime substrate.  SBCL, CCL, or another sufficiently capable implementation MAY be used.  No architectural invariant depends on one implementation.  Implementation-specific image saving, thread control, stack inspection, FFI, low-level memory operations, debugger integration, and source lookup live behind a runtime protocol.
+
+* Design thesis
+
+The project is a Lisp machine if the semantic ground truth of the computer is the live Lisp world.
+
+Writing Unix tools in Lisp is insufficient.  Reimplementing a process supervisor, command shell, registry, package manager, service manager, desktop, or Win32-like API in Lisp while preserving their conventional ontologies would produce a Unix-like or Windows-like system implemented in Lisp.
+
+The Machine instead adopts the following thesis:
+
+#+begin_quote
+The state of the computer should be directly present as typed, live Lisp objects that can be inspected, programmed, combined, repaired, presented, persisted, and reasoned about without translating ordinary internal interactions through textual command interfaces.
+#+end_quote
+
+This thesis has consequences:
+
+1. The live world, not a process table, is the primary container of software.
+2. Objects and protocols, not paths and text streams, are the primary composition mechanism.
+3. A source definition can be inspected, changed, compiled, installed, tested, and continued in the running environment.
+4. A failure normally preserves the computation and exposes conditions, frames, objects, and restarts.
+5. Administration uses the same object system, condition system, compiler, debugger, and history as programming.
+6. A displayed object can remain semantically connected to the Lisp object it presents.
+7. Human and agent interaction are projections over the same object/protocol graph.
+8. Compatibility boundaries may expose Unix concepts, but those concepts stop at the compatibility boundary.
+9. The world can be saved, checkpointed, reconstructed, and recovered as a coherent evolving environment.
+10. The Machine remains useful and repairable without the resident agent.
+
+* Architectural invariants
+
+** The world is primary
+
+The Machine MUST have a distinguished world object representing the active live environment.
+
+The world is not required to equal one physical heap.  It is an architectural object that owns or references the live object graph, activities, namespaces, persistent stores, runtime identity, source lineage, system services, UI sessions, authority graph, and generation identity.
+
+A minimal conceptual representation is:
+
+#+begin_src lisp
+(defclass world ()
+  ((identity)
+   (runtime)
+   (machine)
+   (definitions)
+   (activities)
+   (resources)
+   (services)
+   (presentations)
+   (authorities)
+   (persistent-stores)
+   (history)
+   (generation)))
+#+end_src
+
+This class is illustrative.  The implementation may use different decomposition.
+
+** POSIX remains below the abstraction horizon
+
+The implementation MAY call =open(2)=, =mmap(2)=, =ioctl(2)=, =kevent(2)=, socket APIs, thread primitives, process APIs, and ordinary libc interfaces.
+
+Ordinary Machine code SHOULD instead receive Lisp objects and invoke Lisp protocols.
+
+For example:
+
+#+begin_src lisp
+(network-interfaces *world*)
+;; => (#<ETHERNET-INTERFACE wm0> #<LOOPBACK-INTERFACE lo0>)
+
+(addresses (machine-resource "wm0"))
+;; => (#<IPV6-ADDRESS ...> #<IPV4-ADDRESS ...>)
+#+end_src
+
+The implementation beneath those calls can use NetBSD interfaces freely.
+
+The boundary is cultural as well as technical.  Core subsystems MUST NOT make shell command construction, command output parsing, environment variables, or ad-hoc text formats their ordinary internal API.
+
+** Programming and administration share mechanisms
+
+A service, device, activity, network route, window, persistent job, source definition, or filesystem object MUST be inspectable through the same generic inspection facilities available to application objects where practical.
+
+Changing machine configuration SHOULD mean changing typed objects through protocols, with validation, history, conditions, and restarts.
+
+Operational errors SHOULD produce conditions carrying live objects rather than only strings or exit status codes.
+
+** Live repair is normal
+
+An unhandled condition in an ordinary activity SHOULD suspend that activity in a debuggable state rather than immediately destroy it.
+
+The debugger MUST support:
+
+- frame inspection;
+- evaluation in a selected dynamic context where the runtime permits it;
+- inspection of condition payload objects;
+- restart invocation;
+- source lookup;
+- live redefinition of relevant definitions;
+- retry or continuation where semantics permit;
+- aborting only the affected activity or recovery scope.
+
+Fatal corruption and low-level runtime failure are handled by the separate recovery architecture.
+
+** Source remains authoritative enough to reconstruct
+
+The Machine values the live image, but MUST retain source provenance and reconstructible mutation history.
+
+A saved heap is not the sole record of durable system changes.
+
+The system SHOULD be able to answer, for a live definition:
+
+- where did this definition originate;
+- which source form currently defines it;
+- which live mutations changed it;
+- in which generation it changed;
+- whether durable source reflects the live definition;
+- how to reconstruct the current definition from a known base.
+
+** Shared world by default, deliberate islands for isolation
+
+The ordinary programming model is shared objects in one world.
+
+The Machine MUST also support isolated execution domains.  An isolation domain may be implemented as another Lisp image, NetBSD process, chroot-like environment, rump environment, virtual machine, or another suitable mechanism.
+
+Cross-island communication uses explicit object protocols and serialization or proxies.  Within a world, direct Lisp object references remain the default.
+
+** Human and agent views derive from the same semantics
+
+The graphical UI, Lisp listener, inspector, programmatic API, and resident agent SHOULD observe the same underlying objects and operations.
+
+A new system resource should not require independent implementations for "human UI command", "agent tool", and "programmatic API" if these can be derived from one protocol declaration and presentation metadata.
+
+* Core vocabulary
+
+** WORLD
+
+The coherent live environment.
+
+A WORLD owns the active semantic state of the Machine.  It has identity across ordinary activity creation and destruction and may have identity across reboot or reconstruction.
+
+A WORLD is not synonymous with a heap image.  A heap image is one serialization/checkpoint technique for a WORLD generation.
+
+** MACHINE
+
+The hardware-facing object or object graph exposed to the world by the substrate.
+
+It represents processors, memory, clocks, displays, input devices, network interfaces, storage controllers, block devices, power control, and other machine resources.
+
+It hides raw NetBSD handles unless explicitly requested for low-level work.
+
+** ACTIVITY
+
+A schedulable computation in the Lisp world.
+
+An ACTIVITY is the user-visible replacement for using a Unix process as the universal execution abstraction.  It normally has:
+
+- an identity;
+- an initial function or continuation;
+- execution state;
+- a Lisp dynamic environment;
+- cancellation and restart policy;
+- resource accounting;
+- an authority set;
+- debugger state;
+- an owner or supervisory relationship;
+- optional persistence/restart metadata.
+
+An ACTIVITY MAY be backed by a native Lisp thread, a pool task, a separate process, or another mechanism.
+
+** RESOURCE
+
+A typed object representing a finite or externally anchored thing managed by the Machine.
+
+Examples include storage devices, volumes, network interfaces, displays, ports, connections, files, directories, printers, cameras, audio devices, foreign processes, and external services.
+
+RESOURCE is intentionally broad.  Protocols specialize behavior.
+
+** SERVICE
+
+A long-lived function offered by the world.
+
+A SERVICE is normally an object supervised by an ACTIVITY or activity group.  It can be inspected, started, stopped, quiesced, restarted, reconfigured, and upgraded through Lisp protocols.
+
+** DEFINITION
+
+A source-level named or anonymous program definition with provenance.
+
+Functions, generic functions, methods, classes, macros, compiler macros, variables, types, presentation types, commands, and other runtime-definable entities can participate.
+
+** AUTHORITY
+
+A first-class grant permitting specified operations on specified objects or classes of objects.
+
+AUTHORITY is the Machine's semantic access-control primitive.  Unix credentials may enforce some operations underneath it but do not define the visible authority model.
+
+** PRESENTATION
+
+A durable or ephemeral association between visible UI output and a semantic object plus a presentation type and interaction context.
+
+A PRESENTATION permits the interface to display an object while retaining the ability to use that exact object as input to subsequent operations.
+
+** GENERATION
+
+A named checkpoint of a world with enough metadata to validate, resume, or reconstruct it.
+
+A generation normally records heap/image state where supported, base source identity, runtime identity, machine/OS compatibility information, mutation lineage, and references to persistent stores.
+
+** ISLAND
+
+An isolated execution environment separated from the primary world by a deliberate boundary.
+
+An island is used for fault containment, untrusted code, foreign software, experiments, alternate runtimes, or compatibility tasks.
+
+** EVENT
+
+A structured historical record emitted by the system.
+
+EVENT replaces plain-text logging as the primary diagnostic record.  Events may have textual presentations, but preserve typed fields and object references or stable object identities where possible.
+
+** SESSION
+
+A human or remote interactive context containing input focus, UI state, history, presentation context, and a bounded authority set.
+
+A personal workstation may have one principal session.  The architecture permits more.
+
+** AGENT
+
+An optional reasoning activity operating through explicit protocols, presentations, context projections, and authorities.
+
+Autolith MAY supply the AGENT implementation.
+
+* Layered architecture
+
+The target layering is:
+
+#+begin_example
+                         USER-VISIBLE MACHINE
+
+  +----------------------------------------------------------------+
+  |                         LIVE WORLD                              |
+  |                                                                |
+  |  objects       definitions      activities       services      |
+  |  resources     conditions       restarts         events        |
+  |  compiler      debugger         inspector        history       |
+  |  persistence   presentations    authority        agent         |
+  |  editor        browsers         desktop          applications  |
+  +---------------------------+------------------------------------+
+                              |
+                    MACHINE/RUNTIME PROTOCOLS
+                              |
+  ===================== abstraction horizon ========================
+                              |
+  +---------------------------+------------------------------------+
+  | Common Lisp implementation: SBCL / CCL / other                |
+  | runtime adapter, FFI, image support, stack/debug hooks         |
+  +---------------------------+------------------------------------+
+                              |
+  | NetBSD machine substrate: syscall/libc glue, kqueue, mmap,     |
+  | sockets, wscons/wsdisplay or DRM path, ioctl, filesystem glue  |
+  +---------------------------+------------------------------------+
+                              |
+  +---------------------------v------------------------------------+
+  |                         NetBSD kernel                           |
+  | VM | scheduler | VFS | networking | drivers | hardware support |
+  +---------------------------+------------------------------------+
+                              |
+                           HARDWARE
+#+end_example
+
+The NetBSD userland MAY be present during early development and MAY remain available as compatibility infrastructure.  The production Machine SHOULD require only the subset necessary for bootstrapping, recovery, runtime support, foreign compatibility, and system maintenance beneath the abstraction horizon.
+
+* NetBSD substrate
+
+** Why NetBSD
+
+NetBSD is selected for the project because the kernel provides a mature, portable hardware and Unix mechanism layer while remaining relatively coherent and unusually friendly to cross-building and nonstandard systems work.  NetBSD's build framework can build kernels and complete userlands for a target distinct from the build host.[fn:netbsd-build]
+
+The project specifically values:
+
+- broad architecture support;
+- coherent kernel and driver source;
+- mature VFS, networking, VM, and device subsystems;
+- a build system suitable for cross-compilation;
+- a relatively clean base-system model;
+- permissive licensing across much of the system;
+- the ability to treat the kernel and ordinary userland as separable engineering concerns.
+
+** Kernel and driver boundary
+
+The project assumes that NetBSD drivers remain part of the NetBSD kernel environment.
+
+Drivers are tightly coupled to kernel-internal mechanisms including autoconfiguration, bus abstractions, interrupt handling, DMA, locks, callouts, memory allocation, networking, VFS structures, and device frameworks.  The design does not attempt to extract arbitrary drivers as independent binary modules behind a tiny stable driver ABI.
+
+The useful boundary is instead:
+
+#+begin_example
+NetBSD kernel + drivers  |  Lisp Machine world
+                         ^
+                    syscall/runtime boundary
+#+end_example
+
+The Machine replaces or hides ordinary userland while leaving the kernel and drivers largely intact.
+
+** NetBSD userland relationship
+
+The kernel does not require the complete conventional NetBSD userland to define the semantics of this project.
+
+A staged system may initially boot ordinary NetBSD, launch the Lisp runtime, and enter the Machine.
+
+A later system may use a minimal root containing only:
+
+- boot and kernel support files;
+- required dynamic libraries, if the selected Lisp is dynamically linked;
+- the Lisp runtime and world;
+- a minimal bootstrap/init program if useful;
+- recovery artifacts;
+- substrate helper programs that cannot yet live in Lisp;
+- compatibility tools kept intentionally.
+
+The system SHOULD make these implementation details invisible during ordinary use.
+
+** PID 1 and bootstrap
+
+The architecture does not require the Lisp runtime itself to be PID 1.
+
+A small, intentionally boring bootstrap executable is acceptable and initially preferred.  Its responsibilities may include:
+
+1. establishing minimal mounts needed by the runtime;
+2. opening or configuring the console;
+3. preparing device nodes or runtime directories;
+4. selecting normal or recovery world;
+5. establishing environment required by dynamic linking;
+6. starting the Lisp runtime;
+7. forwarding or handling shutdown/reboot semantics;
+8. entering a recovery path if the runtime cannot start.
+
+Conceptually:
+
+#+begin_example
+bootloader
+   |
+NetBSD kernel
+   |
+minimal bootstrap/init
+   |
+Common Lisp runtime
+   |
+selected WORLD generation
+   |
+Lisp desktop and activities
+#+end_example
+
+If a runtime and substrate later make direct Lisp PID 1 operation simpler and robust, the bootstrap may disappear.
+
+** NetBSD mechanism mapping
+
+The substrate SHOULD expose Lisp protocols rather than raw syscall signatures.
+
+Examples:
+
+| NetBSD mechanism | Machine-level concept |
+|------------------+-----------------------|
+| LWP/thread        | ACTIVITY implementation |
+| process           | ISLAND or foreign process |
+| fd                | hidden handle inside RESOURCE |
+| kqueue/kevent     | event source / wait set |
+| socket            | connection/listener resource |
+| vnode/path        | storage object / pathname resource |
+| mount             | volume attachment |
+| ioctl             | device protocol implementation |
+| sysctl            | machine property implementation |
+| mmap              | mapped storage / runtime memory mechanism |
+| signal            | substrate event / island control |
+| uid/gid           | optional enforcement substrate, not primary authority |
+| syslog/text log   | compatibility sink for EVENT |
+
+** Rump/anykernel
+
+NetBSD's rump-kernel work demonstrates that substantial kernel facilities can be componentized and run in alternate environments.  The first implementation does not depend on rump kernels.
+
+Rump MAY later be used for:
+
+- isolated filesystem experiments;
+- network stacks inside islands;
+- testable device or protocol components;
+- deterministic test environments;
+- reducing reliance on host-global kernel state.
+
+Rump is an optional implementation technique, not a defining feature.
+
+* Common Lisp runtime substrate
+
+** Runtime independence
+
+The Machine MUST define a runtime protocol that can be implemented for SBCL, CCL, and potentially other Common Lisp implementations.
+
+The implementor MAY choose whichever runtime makes a given target practical.
+
+No user-visible Machine API should require applications to branch on =#+sbcl= or =#+ccl= except inside explicitly implementation-specific facilities.
+
+** Required runtime capabilities
+
+A useful runtime adapter SHOULD provide:
+
+- thread/activity creation and interruption;
+- implementation-level stack enumeration;
+- frame metadata where available;
+- condition/debugger integration;
+- source-location lookup;
+- compilation and definition installation;
+- safe enough FFI to NetBSD libc/syscalls and native libraries;
+- weak references and finalization;
+- low-level stream/file-descriptor integration;
+- image/world saving if supported;
+- startup from a saved image if supported;
+- runtime identity and compatibility metadata;
+- GC information and hooks useful for monitoring;
+- implementation source identification where practical.
+
+The architecture MUST degrade deliberately when an implementation lacks one of these capabilities.  For example, generation reconstruction may remain fully supported while exact heap checkpointing is unavailable.
+
+** Suggested runtime protocol
+
+The following is illustrative:
+
+#+begin_src lisp
+(defgeneric runtime-identity (runtime))
+(defgeneric runtime-save-image (runtime destination &key entry-point))
+(defgeneric runtime-load-compatibility (runtime image-metadata))
+(defgeneric runtime-start-activity (runtime function &key name))
+(defgeneric runtime-interrupt-activity (runtime activity function))
+(defgeneric runtime-stack (runtime activity))
+(defgeneric runtime-frame-bindings (runtime frame))
+(defgeneric runtime-definition-source (runtime definition))
+(defgeneric runtime-install-definition (runtime definition form))
+(defgeneric runtime-compile-definition (runtime form))
+(defgeneric runtime-gc-information (runtime))
+(defgeneric runtime-make-island (runtime specification))
+#+end_src
+
+Implementation-specific extension protocols are allowed.
+
+** SBCL and CCL
+
+SBCL is acceptable as a primary substrate and may be easier for early implementation because Autolith already demonstrates sophisticated image saving, source matching, live mutation, worker images, and checkpoint machinery on SBCL.[fn:autolith-readme][fn:autolith-guide]
+
+CCL is equally valid where its runtime model, existing NetBSD port, or implementation characteristics are preferable.
+
+The project must not be architecturally branded as an SBCL system or a CCL system.
+
+** Implementation source
+
+Where feasible, the runtime adapter SHOULD know the exact implementation version and corresponding source tree.
+
+This allows implementation-level objects, frames, compiler internals, and runtime failures to remain inspectable from inside the Machine.
+
+Implementation source is read-only reference material unless the user explicitly enters implementation-development mode.
+
+
+* World object model
+
+** World identity
+
+A world has a stable logical identity and a current generation.
+
+The logical identity survives checkpointing and ordinary restart.  A generation identifies one exact checkpoint/reconstructible state within that world lineage.
+
+The world SHOULD expose:
+
+#+begin_src lisp
+(world-id *world*)
+(world-generation *world*)
+(world-runtime *world*)
+(world-machine *world*)
+(world-history *world*)
+(world-authority-root *world*)
+#+end_src
+
+A new world can be forked from an existing generation.  Forking creates a new logical identity while retaining ancestry metadata.
+
+** World registry
+
+The recovery environment and boot selector SHOULD know about all retained worlds and generations without loading them.
+
+Each world registry entry should contain enough immutable metadata to answer:
+
+- world identity and human-readable name;
+- creation time;
+- parent world/generation if forked;
+- selected generation;
+- runtime implementation/version;
+- NetBSD version/build identity;
+- architecture;
+- source revision;
+- reconstruction manifest location;
+- heap image location if present;
+- persistent-store identities;
+- last clean shutdown state;
+- last fatal condition/crash capsule if present.
+
+The registry itself must be simple enough to inspect and repair without loading the active world.
+
+** World startup phases
+
+A normal startup has explicit phases:
+
+1. kernel and substrate bootstrap;
+2. recovery-capable runtime start;
+3. validate selected world generation;
+4. validate runtime and source compatibility;
+5. attach required persistent stores;
+6. load or reconstruct live world;
+7. restore substrate-backed machine resources;
+8. start essential system activities;
+9. establish graphical display and principal session;
+10. resume optional persistent activities;
+11. start optional agent;
+12. mark world operational.
+
+A failure before phase 6 returns to recovery selection.  A failure after phase 6 can enter the live debugger if enough of the world is intact.
+
+** World shutdown
+
+Shutdown is an operation on the world, not primarily a shell command.
+
+A normal shutdown SHOULD:
+
+- announce an impending shutdown event;
+- quiesce or ask persistent services to flush;
+- checkpoint or commit configured durable state;
+- close or detach persistent stores;
+- record a clean generation marker;
+- stop agent/provider activity;
+- release display/input resources;
+- request the substrate to halt, power off, or reboot.
+
+The condition system should permit restarts such as continuing despite a nonessential service that refuses to quiesce.
+
+* Activities and concurrency
+
+** Activity semantics
+
+An ACTIVITY is a live Lisp computation with system metadata.
+
+The activity protocol SHOULD include:
+
+#+begin_src lisp
+(start activity)
+(stop activity)
+(interrupt activity function)
+(suspend activity)
+(resume activity)
+(restart activity)
+(debug activity)
+(parent activity)
+(children activity)
+(authorities activity)
+(resource-usage activity)
+(activity-state activity)
+#+end_src
+
+An activity's state might include =:new=, =:runnable=, =:waiting=, =:suspended=, =:debugging=, =:quiescing=, =:stopped=, or =:failed=.
+
+The exact state machine is an implementation matter, but it must preserve the ability to distinguish a computation waiting normally from one suspended for debugger interaction.
+
+** Shared address space
+
+The primary world follows the historical Lisp-machine preference for a shared object space.  Symbolics processes likewise shared one virtual address space and communicated directly using ordinary Lisp objects.[fn:symbolics-processes]
+
+This project adopts the semantic benefit, not necessarily the identical implementation.
+
+Two activities inside one world may pass an object directly:
+
+#+begin_src lisp
+(send editor-activity message-object)
+#+end_src
+
+No serialization format, pipe, file, or socket is required merely because the receiving computation is concurrently scheduled.
+
+** Supervision
+
+Activities SHOULD form a supervision graph.
+
+A supervisor can define policy for:
+
+- child startup;
+- restart after unhandled conditions;
+- restart rate limits;
+- debugger entry;
+- escalation to a human session;
+- escalation to an agent;
+- resource limits;
+- graceful shutdown;
+- generation persistence.
+
+This is not intended to reproduce a Unix service manager.  Supervision is a Lisp object protocol applying equally to an editor background task, network service, indexing task, agent worker, or application computation.
+
+** Isolation islands
+
+An ISLAND has:
+
+- an identity;
+- a backing execution mechanism;
+- an explicit authority boundary;
+- explicit import/export object bridges;
+- lifecycle management;
+- resource accounting;
+- crash containment;
+- optional persistence.
+
+A Lisp island SHOULD normally run another image of the selected Common Lisp runtime.  It may start from a pristine base, a selected world-derived image, or an application-specific image.
+
+The primary use cases are:
+
+- executing model-generated or otherwise untrusted code;
+- testing live mutations;
+- running incompatible dependencies;
+- containing applications with high crash risk;
+- running foreign Unix software;
+- comparing pristine and modified runtime behavior;
+- performing reproducibility tests;
+- running a different Common Lisp implementation.
+
+** Cross-island object bridges
+
+A bridge does not pretend that arbitrary identity-preserving shared Lisp references exist across isolated heaps.
+
+Objects crossing a bridge must have one of:
+
+- a value representation;
+- a stable object identity with proxy semantics;
+- a capability/facet handle;
+- a stream/event channel;
+- an explicitly application-defined serialization.
+
+The user interface may make a remote proxy look like an ordinary presentation while preserving its remote/island provenance.
+
+** Resource accounting
+
+Activities and islands SHOULD expose resource accounting as objects, including:
+
+- CPU time;
+- wall time;
+- allocations and GC pressure when measurable;
+- open substrate handles;
+- network traffic;
+- persistent storage use;
+- current wait reason;
+- held authorities.
+
+Accounting exists for inspection and policy, not merely billing or quotas.
+
+* Authority model
+
+** Motivation
+
+A classic personal Lisp machine's shared world provides extraordinary inspectability but weak containment.  A modern Machine needs a way to preserve live-object integration while preventing every activity, especially an embedded model-driven agent, from automatically possessing ambient authority over everything.
+
+AUTHORITY is therefore first class.
+
+** Authority as object capability or facet
+
+An authority grant names or implies:
+
+- the subject allowed to act;
+- the target object, target set, or resolver;
+- the operation or protocol facet;
+- optional constraints;
+- optional lifetime;
+- optional delegation rights;
+- provenance.
+
+Examples:
+
+#+begin_src lisp
+#<AUTHORITY
+  subject=#<ACTIVITY operator-agent>
+  operation=INSPECT
+  target=#<WORLD lambda-1>>
+
+#<AUTHORITY
+  subject=#<ACTIVITY mail-client>
+  operation=CONNECT
+  target=#<NETWORK-POLICY outbound-mail>>
+
+#<AUTHORITY
+  subject=#<SESSION local-human>
+  operation=MODIFY-DEFINITION
+  target=#<SYSTEM user-world>>
+#+end_src
+
+The concrete capability implementation may use unforgeable objects, sealed references, authority tables, lexical capability objects, or another mechanism.
+
+** Ambient authority
+
+The principal interactive human session MAY begin with broad authority on a personal workstation.
+
+System activities and the resident agent SHOULD receive explicit narrower authorities.
+
+Foreign code in an island should begin with minimal imported capabilities.
+
+** Authority projection
+
+A holder may possess an object without possessing all operations on it.
+
+For example, the agent may receive a presentation of:
+
+#+begin_src lisp
+#<ETHERNET-INTERFACE wm0>
+#+end_src
+
+with authority to inspect link state and propose configuration but without authority to detach the interface or alter routing.
+
+The presentation layer and agent tool projection must respect the actual authority object rather than hiding only UI controls.
+
+** Delegation
+
+Delegation SHOULD be explicit and inspectable.
+
+A human might execute:
+
+#+begin_src lisp
+(with-delegated-authority
+    (operator-agent
+     (authority :configure (machine-resource "wm0"))
+     :duration 300)
+  (ask operator-agent "bring this interface onto the lab network"))
+#+end_src
+
+The exact syntax is illustrative.
+
+The history records who delegated what and which operations used it.
+
+** Substrate enforcement
+
+Some authority rules can be enforced entirely within the Lisp world.  Strong security against hostile code cannot depend solely on cooperative Lisp checks inside one shared heap.
+
+For hostile or model-generated arbitrary code, the Machine SHOULD combine semantic authority with an ISLAND or NetBSD-level enforcement mechanism.
+
+Unix uid/gid, file permissions, pledge-like mechanisms where available, chroot, kauth, process credentials, network filtering, or virtualized/rump facilities MAY be used underneath.  The visible model remains AUTHORITY.
+
+* Resource and service model
+
+** Resources are authoritative objects
+
+A RESOURCE object should contain or refer to the live state needed to operate the underlying thing, rather than being a decorative wrapper around command output.
+
+For a network interface:
+
+#+begin_src lisp
+(describe (machine-resource "wm0"))
+#+end_src
+
+might expose:
+
+- interface type and hardware identity;
+- NetBSD attachment/device lineage;
+- link state;
+- addresses;
+- routes referring to it;
+- counters;
+- associated configuration policy;
+- owning or monitoring activities;
+- recent structured events;
+- available operations;
+- current conditions or degraded state.
+
+The implementation may query NetBSD on demand.  The result is normalized into Lisp objects.
+
+** Services
+
+Services are normal objects.
+
+Illustrative protocol:
+
+#+begin_src lisp
+(service-state service)
+(start service)
+(stop service)
+(quiesce service)
+(restart service)
+(configuration service)
+(reconfigure service new-configuration)
+(dependencies service)
+(dependents service)
+(service-events service)
+#+end_src
+
+A service need not correspond to a process.  It may be a collection of activities and objects in the main world.
+
+** Device model
+
+Hardware devices SHOULD be represented in a traversable graph:
+
+#+begin_example
+#<MACHINE workstation>
+  processors
+  memory
+  buses
+    pci
+      nvme-controller
+        namespace/volume
+      ethernet-controller
+        interface wm0
+  displays
+  input-devices
+  clocks
+  power
+#+end_example
+
+Low-level driver identifiers and NetBSD device nodes remain available as implementation metadata.
+
+** Storage
+
+The Machine distinguishes:
+
+- physical storage DEVICE;
+- block or namespace RESOURCE;
+- filesystem object;
+- mounted/attached VOLUME;
+- PATHNAME or storage locator;
+- FILE and DIRECTORY resources;
+- persistent Lisp object STORE.
+
+Files remain useful and important.  They are not the universal namespace for all system concepts.
+
+** Networking
+
+Networking objects SHOULD include:
+
+- network interface;
+- address;
+- route;
+- neighbor;
+- resolver configuration;
+- listener;
+- connection;
+- endpoint;
+- packet/counter information as needed;
+- network policy/authority objects.
+
+BSD sockets are implementation handles.
+
+An application should normally receive a =CONNECTION= object, not an integer file descriptor.
+
+** Power and machine control
+
+Reboot, halt, sleep where supported, and poweroff are machine operations subject to authority and shutdown protocols.
+
+A Lisp debugger should be able to inspect why a shutdown is blocked and invoke appropriate restarts.
+
+* Namespace and object discovery
+
+** No single filesystem ontology
+
+The Machine has a discoverable object namespace but need not force every object into one hierarchical path syntax.
+
+Useful resolvers might include:
+
+#+begin_src lisp
+(machine-resource "wm0")
+(service :dns)
+(activity 'compiler-indexer)
+(world-object object-id)
+(definition 'foo)
+(window 'listener-1)
+#+end_src
+
+These can be unified by a generic locator protocol without pretending all objects are files.
+
+** Stable identities
+
+Objects representing external or durable entities SHOULD have stable identities suitable for:
+
+- history references;
+- event records;
+- presentations surviving redraw;
+- persisted links;
+- agent context;
+- reconstruction after reboot.
+
+Ephemeral Lisp objects need no stable identity unless they enter such systems.
+
+** Browsers instead of mandatory path memorization
+
+The primary UI should allow traversal from objects to related objects.
+
+For example:
+
+#+begin_example
+MACHINE
+ -> NETWORK
+   -> wm0
+      -> addresses
+      -> routes
+      -> recent events
+      -> owner/policy
+      -> driver metadata
+#+end_example
+
+The user may still type names and pathnames directly.
+
+* Conditions, restarts, debugger, and live repair
+
+** Condition objects
+
+Machine conditions SHOULD carry structured fields containing relevant Lisp objects.
+
+Example:
+
+#+begin_src lisp
+(define-condition storage-device-io-error (machine-error)
+  ((device :initarg :device :reader condition-device)
+   (operation :initarg :operation :reader condition-operation)
+   (location :initarg :location :reader condition-location)
+   (underlying :initarg :underlying :reader condition-underlying)))
+#+end_src
+
+The UI presentation can render:
+
+#+begin_example
+STORAGE-DEVICE-IO-ERROR
+
+Device:     #<NVME-NAMESPACE nvme0n1>
+Operation:  READ
+Location:   #<BLOCK 1938201>
+World:      #<WORLD lambda-1>
+Activity:   #<ACTIVITY object-store-writer>
+
+Restarts:
+  RETRY
+  READ-FROM-MIRROR
+  MARK-DEGRADED
+  QUIESCE-STORE
+  DEBUG
+  ABORT-ACTIVITY
+#+end_example
+
+** Break windows
+
+The canonical UI follows the Interlisp tradition in which a break opens a dedicated interactive window with the power of an executive/listener plus context-specific debugging operations.  Interlisp's break windows allowed expression evaluation, variable and stack inspection, editing, and continuation while preserving the stopped computation.[fn:interlisp-timeline][fn:medley-primer]
+
+Each nested break MAY open another break window or another debugger pane linked to the same activity.
+
+** Debugger as an executive
+
+A debugger interaction is not a restricted modal crash dialog.
+
+Within the authority of the session, the user SHOULD be able to:
+
+- evaluate Lisp;
+- inspect arbitrary reachable objects;
+- browse callers and callees;
+- edit a definition;
+- compile/install that edit;
+- invoke a restart;
+- return a chosen value;
+- retry a frame where runtime semantics allow;
+- abort to a selected recovery boundary;
+- ask the resident agent for analysis;
+- fork the state into an island for experimentation.
+
+** Restarts are machine-level recovery operations
+
+System services SHOULD expose meaningful restarts where the problem admits them.
+
+Examples:
+
+- retry I/O;
+- use mirror;
+- reconnect;
+- select alternate network interface;
+- reauthenticate;
+- replace a definition;
+- reconfigure a service;
+- detach a resource;
+- continue with degraded functionality;
+- restart one child activity;
+- fork a recovery island;
+- checkpoint before destructive recovery.
+
+** Agent participation in conditions
+
+If an agent is present, a condition MAY expose a restart or UI command such as =ASK-AGENT=.
+
+The agent receives a bounded semantic projection including:
+
+- the condition object;
+- selected stack/frame information;
+- related resource objects;
+- available restarts;
+- recent relevant events;
+- source definitions where authorized;
+- current world/generation metadata.
+
+The agent can explain, recommend, or invoke a restart only according to its current authority and policy.
+
+The condition system remains fully usable without an agent.
+
+* History, undo, and the programmer's assistant
+
+** Historical inspiration
+
+Interlisp's Programmer's Assistant recorded user interactions and supported replay and undo, including selective undo of earlier operations.[fn:interlisp-timeline]
+
+The Machine SHOULD generalize this idea across programming and administration.
+
+** Interaction history
+
+A SESSION has a structured history of:
+
+- listener evaluations;
+- editor operations;
+- definition changes;
+- object manipulations;
+- administrative commands;
+- debugger actions;
+- restart invocations;
+- agent requests and accepted actions;
+- authority delegations;
+- checkpoints and rollbacks.
+
+History items are EVENT-like objects with enough data for presentation and, when designed to support it, replay or undo.
+
+** Undo protocol
+
+Operations that can reasonably be undone SHOULD provide an undo action at the semantic operation level.
+
+Undo is not required to mean reversing all physical effects.  Each operation declares its undo semantics and limitations.
+
+The UI should allow selecting an older history event and invoking its undo even when it is not the latest event, provided the operation declares selective undo safe.
+
+** Replay
+
+History events may expose replay with editable arguments.
+
+A Lisp listener output can therefore be reexecuted by selecting its previous input presentation rather than copying text.
+
+** DWIM-style assistance
+
+Automatic correction is optional.
+
+The system MAY provide typo correction, symbol suggestions, operation completion, or context-aware repair inspired by Interlisp DWIM.  Such facilities must be inspectable and reversible through history.
+
+The resident agent may supply richer suggestions, but simple local corrections should not require a network model.
+
+* Source, definitions, compilation, and live evolution
+
+** Definitions are first-class
+
+The Machine SHOULD maintain definition metadata separate from the implementation's minimal function object metadata.
+
+A DEFINITION can record:
+
+- definition kind;
+- name;
+- current source form;
+- source location;
+- owning system/module;
+- compiler identity/options;
+- dependencies if known;
+- generation introduced;
+- mutation lineage;
+- durable source status;
+- documentation;
+- tests associated with it.
+
+** Source editor and structure editor
+
+The canonical environment SHOULD include both:
+
+1. a normal source text editor suitable for Common Lisp;
+2. a structure-aware editor inspired by Interlisp's historical structure editors.
+
+The structure editor operates on Lisp syntax objects rather than merely text ranges.  It should support moving through forms, selecting subforms, replacing subforms, wrapping/unwrapping forms, structural search, and evaluating/compiling selected structures.
+
+The text editor and structure editor operate over one source model where possible rather than separate copies.
+
+** Source provenance
+
+A live definition can originate from:
+
+- tracked source;
+- a loaded system;
+- a listener definition;
+- an agent-proposed mutation;
+- a debugger repair;
+- a generated definition;
+- an imported world generation.
+
+The source subsystem records provenance.
+
+** Live install transaction
+
+A durable definition change SHOULD support a transaction such as:
+
+1. capture old live definition and source metadata;
+2. journal proposed new source;
+3. parse/validate;
+4. compile in the active world or an island;
+5. optionally run associated tests in an island;
+6. install new definition;
+7. record history and provenance;
+8. update reconstructible mutation record;
+9. optionally update authoritative source;
+10. optionally create a generation checkpoint.
+
+The transaction must define rollback behavior if installation or validation fails.
+
+** Source and live image are peers with explicit authority
+
+The live image is primary for immediate interaction.
+
+Tracked source is primary for clean reconstruction and long-term maintainability.
+
+The system should never silently assume they are identical.
+
+A browser SHOULD make drift visible:
+
+#+begin_example
+FOO
+  live definition: generation 481, mutation M-199
+  source: src/parser.lisp revision abc123
+  status: live definition differs from tracked source
+#+end_example
+
+** System building
+
+ASDF MAY be used underneath and may remain visible to Lisp programmers.
+
+The Machine SHOULD layer a live system model over it:
+
+#+begin_src lisp
+(system :editor)
+(dependencies (system :editor))
+(definitions (system :editor))
+(reload (system :editor))
+(test (system :editor))
+#+end_src
+
+Installing software means making definitions, assets, persistent schemas, and services available to the world.  It need not mean installing an executable into a path.
+
+* Persistence model
+
+** Persistence is plural
+
+The system separates at least these kinds of state:
+
+1. authoritative source and system definitions;
+2. reconstructible live definition mutations;
+3. exact heap/image checkpoint generations when supported;
+4. persistent application/user objects;
+5. structured interaction history;
+6. structured system events;
+7. user preferences;
+8. credentials/secrets;
+9. world registry and selection metadata;
+10. recovery/crash evidence;
+11. agent conversations and memories when an agent is installed.
+
+These may have different durability, confidentiality, portability, and reconstruction requirements.
+
+** Heap generations
+
+Where supported, the runtime can save an exact or near-exact heap image.
+
+A generation manifest SHOULD contain:
+
+- world ID;
+- generation ID;
+- parent generation;
+- timestamp;
+- runtime implementation/version/build;
+- architecture;
+- NetBSD version/build;
+- Machine source revision;
+- dependency/system lock identity;
+- live mutation lineage head;
+- persistent-store schema/identity;
+- heap image hash/path;
+- reconstruct script hash/path;
+- clean/unclean flag;
+- optional human note.
+
+A saved heap is rejected if the runtime adapter determines it is incompatible.
+
+** Reconstructible generations
+
+Every durable generation SHOULD be reconstructible without the heap image to the extent practical.
+
+A reconstruction recipe can:
+
+- select exact source revision;
+- select runtime/dependency identity;
+- load base systems;
+- replay ordered durable definition mutations;
+- attach persistent stores;
+- run explicit migration steps;
+- establish selected world state.
+
+Some ephemeral execution state, UI cursor location, open network connections, or continuation stacks may be impossible to reproduce exactly.  The manifest states what is exact and what is reconstructed.
+
+** Persistent object stores
+
+Application state should not require stuffing every durable object into the saved heap.
+
+The Machine should define a persistent object store protocol with:
+
+- stable object identity;
+- schema/version metadata;
+- transactions;
+- lazy loading or materialization;
+- references to world objects where meaningful;
+- migration;
+- snapshot/backup;
+- event/history integration.
+
+Implementations may use ordinary files, databases, mmap files, object databases, or custom stores.
+
+** Credentials
+
+Credentials MUST be separable from heap generations intended for archival, sharing, recovery comparison, or source reconstruction.
+
+Provider tokens, private keys, passwords, and analogous secrets should live in a protected credential store.  Live objects hold capability references or retrieval handles rather than durable plaintext tokens.
+
+Checkpointing should be able to verify that transient secret material is not unintentionally serialized when the runtime permits such control.  When exact heap semantics make this impossible to guarantee, generations containing secrets must be marked and protected accordingly.
+
+** Checkpoint policy
+
+Checkpoints may be:
+
+- manual;
+- before a live system upgrade;
+- before a high-risk mutation;
+- before an agent receives temporary broad authority;
+- periodic;
+- at clean shutdown;
+- after a known-good milestone.
+
+The system SHOULD avoid uncontrolled accumulation by exposing retention policy as inspectable Lisp objects.
+
+* Generation, rollback, and recovery
+
+** Generation graph
+
+Generations form a graph or lineage, not merely numbered backups.
+
+A user can fork:
+
+#+begin_example
+G100
+ |
+G101
+ |\
+ | G102-experiment
+ |
+G102
+ |
+G103
+#+end_example
+
+The recovery browser can inspect ancestry and notes.
+
+** Rollback semantics
+
+Rolling back a world means selecting or reconstructing an older generation.
+
+Persistent stores require explicit policy.  A rollback may:
+
+- roll back heap only while leaving external durable stores current;
+- restore store snapshots linked to the generation;
+- fork a new world from the old generation to avoid destroying later state.
+
+The UI MUST make this distinction explicit because heap time and durable-store time are not automatically identical.
+
+** Pristine recovery world
+
+The recovery world is a deliberately small Lisp environment built from known source and runtime inputs.
+
+It includes enough facilities to:
+
+- enumerate worlds/generations;
+- inspect manifests;
+- verify hashes and compatibility;
+- inspect crash capsules;
+- inspect mutation/reconstruction history;
+- inspect selected source;
+- boot a generation;
+- reconstruct a generation;
+- disable or skip optional startup activities;
+- fork a damaged generation into an island;
+- select a known-good generation;
+- perform filesystem-level rescue where necessary;
+- shut down/reboot.
+
+It should not automatically load the potentially damaged active world.
+
+** Recovery independence
+
+Recovery MUST function with:
+
+- no network;
+- no model provider;
+- no Autolith;
+- no user project source beyond what is locally retained;
+- the active world unbootable.
+
+An optional agent may be loaded after the recovery environment is functioning.
+
+** Crash capsule
+
+A fatal runtime or bootstrap failure SHOULD write a bounded crash capsule outside the active heap when possible.
+
+It may include:
+
+- world/generation identity;
+- runtime identity;
+- condition summary;
+- native/runtime backtrace;
+- recent structured event IDs;
+- current mutation transaction;
+- selected source revision;
+- current active activity identity;
+- recent checkpoint identity;
+- shutdown/boot phase.
+
+The capsule should favor bounded, parseable data over enormous memory dumps.
+
+** Agent-assisted recovery
+
+If the user enables it, recovery may start an agent with read-only or narrowly scoped authority over crash evidence, source, manifests, events, and selected world state.
+
+The agent may propose:
+
+- a source fix;
+- skipping one startup activity;
+- rebuilding a generation;
+- selecting a prior generation;
+- testing a repair in an island.
+
+Applying changes requires the same authority and transaction machinery as ordinary live mutation.
+
+Autolith's current separation of a pristine recovery image, live generations, reconstructible mutations, and restricted crash-diagnosis tooling is direct prior art for this design.[fn:autolith-guide]
+
+
+* Canonical graphical environment
+
+** UI identity
+
+The canonical graphical environment is a monochrome bitmap desktop inspired primarily by Xerox PARC Interlisp-D and Medley.
+
+The historical inspiration is architectural as much as visual.  Interlisp evolved an integrated display-oriented programming environment with overlapping windows, mouse interaction, editors, browsers, an Executive, break windows, history, and graphical tools.[fn:interlisp-timeline]  Medley retained an interactive window-based debugger whose break window was itself an executive capable of evaluating expressions, examining program state, changing data, and invoking editors.[fn:medley-primer]
+
+The Machine adopts that integrated style while implementing new protocols suitable for Common Lisp and the rest of this specification.
+
+The desktop MUST look and behave as one coherent Lisp environment.  It is not intended to resemble a contemporary Unix desktop with terminal windows containing Lisp applications.
+
+** Canonical display model
+
+The canonical logical display is 1-bit black and white.
+
+Rendering primitives operate in a monochrome coordinate space with:
+
+- black and white pixels;
+- bitmap fonts;
+- stipple/dither patterns for texture and disabled/inactive state;
+- bitmap icons where useful;
+- invert/XOR-style highlighting where technically appropriate;
+- line and rectangle primitives;
+- bit-block transfer operations;
+- clipping regions;
+- cursor bitmaps;
+- monochrome images.
+
+A backend may render the 1-bit surface into a higher-depth host buffer, but the UI itself makes no semantic use of color.
+
+This deliberately constrains visual language and makes the desktop recognizably PARC-derived rather than another themeable widget set.
+
+** Logical framebuffer
+
+The graphics subsystem SHOULD expose a canonical logical framebuffer abstraction:
+
+#+begin_src lisp
+(display-size display)
+(display-depth display)       ; => 1 for canonical desktop
+(bitblt source destination ...)
+(draw-line ...)
+(fill-region ...)
+(draw-text ...)
+(set-cursor ...)
+#+end_src
+
+Higher-level window rendering should not depend directly on NetBSD framebuffer APIs or Wayland.
+
+Backends translate the canonical graphics operations or completed damage regions to physical displays.
+
+** Backends
+
+The display/input backend protocol MUST permit at least:
+
+1. a native NetBSD backend;
+2. a hosted development backend.
+
+A Wayland backend is explicitly acceptable as the hosted backend.
+
+The Wayland backend SHOULD present the Machine as a single top-level surface containing the entire Lisp desktop, or a very small number of surfaces if unavoidable.  Lisp windows remain Lisp windows.  The Wayland compositor is not asked to manage each Machine window as a native Wayland application window.
+
+This means:
+
+#+begin_example
+Wayland compositor
+  |
+  +-- one "Lisp Machine" surface
+        |
+        +-- Lisp desktop
+             +-- Exec
+             +-- Editor
+             +-- Inspector
+             +-- Break window
+             +-- Browser
+#+end_example
+
+The Wayland protocol is then equivalent to a display/input transport.
+
+A native backend may use the practical NetBSD console, wscons/wsdisplay, DRM/KMS path, mmap-able framebuffer, or another target-appropriate mechanism.  The backend implementation may evolve without changing the window system.
+
+A headless backend SHOULD exist for tests and remote/noninteractive operation.
+
+** Window model
+
+Windows are Lisp objects.
+
+A WINDOW should expose:
+
+- identity;
+- title or title presentation;
+- bounds;
+- visibility;
+- stacking relation;
+- input focus;
+- associated activity/session;
+- presentation history or backing model;
+- menus;
+- event handlers;
+- repaint/damage protocol;
+- optional scroll model;
+- authority/context.
+
+Windows may overlap freely.
+
+The window manager itself is a Lisp subsystem inside the world.
+
+** Window chrome
+
+The initial visual vocabulary SHOULD be intentionally sparse:
+
+- one-pixel or similarly thin black borders;
+- monochrome title bars or title areas;
+- small bitmap controls;
+- no gradients;
+- no shadows;
+- no animations required for basic operations;
+- scroll regions using simple bitmap affordances;
+- selected/inactive state distinguished by inversion, border changes, stipple, or text treatment.
+
+Historical accuracy is not an absolute requirement.  Coherence and low conceptual overhead are.
+
+** Mouse model
+
+The mouse is a first-class input device and should be useful everywhere.
+
+The system MAY support three-button mice directly in the PARC tradition.  Two-button and wheel mice require mappings.
+
+Mouse gestures SHOULD include:
+
+- select object/presentation;
+- invoke context menu;
+- choose menu entry;
+- move/reshape window;
+- scroll;
+- extend selection;
+- transfer a presented object into another input context;
+- point at a stack frame, definition, resource, or historical event to operate on it.
+
+The UI must not reduce mouse interaction to placing a text cursor in terminal emulators.
+
+** Keyboard model
+
+Keyboard interaction remains important, especially for Lisp editing and listener work.
+
+The environment SHOULD support:
+
+- Emacs-like editing bindings where sensible;
+- direct command bindings;
+- modifier chords;
+- typed command completion;
+- keyboard traversal of menus and presentations;
+- repeatable history commands;
+- structural editing commands.
+
+Keymaps are Lisp objects and should be inspectable and modifiable live.
+
+** Menus
+
+Menus are generated from command and presentation protocols.
+
+A menu entry contains semantic operation metadata, not only a label and callback closure.
+
+This enables the same operation to participate in:
+
+- a menu;
+- keyboard invocation;
+- listener completion;
+- documentation;
+- agent tool projection;
+- history/replay.
+
+Pop-up/context menus are encouraged because they fit the Interlisp interaction style.
+
+** Fonts and text
+
+The canonical environment uses bitmap fonts.
+
+The initial system MAY ship a small set such as:
+
+- fixed-width programming font;
+- proportional UI font;
+- bold variants;
+- italic variants if useful;
+- several discrete point/pixel sizes.
+
+Font objects remain inspectable resources.
+
+The text rendering subsystem should support full Unicode as far as practical even though the visual style is historically derived.
+
+** Clipboard and selection
+
+Selection is semantic where possible.
+
+Text selection produces text.
+
+Selecting a presentation can additionally identify the underlying object.
+
+The clipboard may therefore contain multiple representations:
+
+#+begin_src lisp
+#<CLIPBOARD-ENTRY
+  primary=#<PATHNAME ...>
+  text="/home/lho/src/foo.lisp"
+  representations=(...)>
+#+end_src
+
+Paste/accept chooses the richest representation compatible with the destination's input context.
+
+* Presentation system
+
+** Purpose
+
+A central UI invariant is that useful output should retain semantic connection to the Lisp objects that produced it.
+
+Symbolics Dynamic Windows formalized a presentation system in which displayed objects had presentation types and context-sensitive mouse operations.[fn:symbolics-ui]  This project borrows the idea while using an Interlisp-D visual language.
+
+A PRESENTATION minimally associates:
+
+- an object or stable object reference;
+- a presentation type;
+- display geometry;
+- source window/history;
+- available operations under the current authority;
+- rendering metadata;
+- optional textual representation.
+
+** Example
+
+An Exec prints:
+
+#+begin_example
+#<ETHERNET-INTERFACE wm0 UP 1Gb/s>
+#+end_example
+
+The pixels are backed by a presentation referencing the actual interface object or a stable resolver for it.
+
+Clicking it might offer:
+
+- Inspect
+- Show addresses
+- Show routes
+- Show recent events
+- Configure
+- Copy printed representation
+
+Whether =Configure= appears and succeeds depends on authority.
+
+** Typed input contexts
+
+Commands declare the type of object they accept.
+
+For example:
+
+#+begin_src lisp
+(define-command inspect-resource ((resource resource))
+  ...)
+
+(define-command open-definition ((definition definition))
+  ...)
+#+end_src
+
+If the current command prompt expects a =RESOURCE=, selecting a compatible on-screen presentation supplies it directly.
+
+This is superior to copying a printed name and resolving it again.
+
+** Presentation translators
+
+A presentation translator converts one presentation type to another accepted type where a meaningful relation exists.
+
+Examples:
+
+- FILE -> PATHNAME;
+- STORAGE-VOLUME -> FILESYSTEM;
+- ACTIVITY -> DEBUGGABLE-COMPUTATION;
+- DEFINITION -> SOURCE-LOCATION;
+- NETWORK-CONNECTION -> REMOTE-ENDPOINT.
+
+Translations are explicit, inspectable protocols.
+
+** Output history
+
+Windows that behave like listeners or browsers SHOULD keep semantic output history, not merely rendered pixels.
+
+Scrolling backward restores presentations and their operations as long as the referenced objects remain resolvable.
+
+If an object has disappeared, the presentation can degrade to a historical reference and offer operations such as "show event at time" or "resolve current object with same stable identity."
+
+* The Executive / Lisp Listener
+
+** Primary interaction surface
+
+The Machine MUST have a Lisp Executive, usually called an Exec or Listener in UI text.
+
+It is a full Common Lisp REPL integrated with presentations, history, completion, inspection, source lookup, conditions, and commands.
+
+It is not a shell prompt.
+
+** Evaluation
+
+Ordinary Common Lisp forms can be entered directly.
+
+Results are presented semantically:
+
+#+begin_src lisp
+(network-interfaces *machine*)
+#+end_src
+
+might render as clickable presentations for each interface.
+
+** Commands and Lisp coexist
+
+The Exec MAY support command syntax for common interactive actions, but commands resolve to Lisp operations rather than external executables.
+
+For example, a command UI may allow:
+
+#+begin_example
+Inspect wm0
+Debug compiler-indexer
+Show callers of COMPILE-FILE
+Open definition FOO
+Checkpoint world "before parser rewrite"
+#+end_example
+
+The corresponding Lisp functions remain available.
+
+** History
+
+Each evaluation or command creates a structured history event.
+
+Previous inputs can be:
+
+- reexecuted;
+- edited and reexecuted;
+- used as values;
+- selectively undone where supported;
+- turned into source;
+- referenced in conversation with an agent.
+
+** Multiple Execs
+
+A user may create multiple Exec windows with distinct:
+
+- packages;
+- dynamic environments;
+- history views;
+- authorities;
+- debugging contexts;
+- island targets.
+
+A break/debugger Exec is one specialized example.
+
+* Editor environment
+
+** Source editor
+
+The source editor is a native Lisp window/application.
+
+It provides:
+
+- Common Lisp indentation;
+- syntax-aware movement;
+- definition navigation;
+- compile/evaluate region/form/definition;
+- source provenance;
+- definition status against live world;
+- callers/callees/references;
+- inline conditions/compiler notes;
+- generation/mutation history;
+- interaction with the inspector and debugger.
+
+** Structure editor
+
+A DEdit/SEdit-inspired structure editor SHOULD be a first-class editor, not a demo.
+
+Operations include:
+
+- select form/subform;
+- descend/ascend syntax tree;
+- next/previous sibling;
+- splice;
+- wrap;
+- unwrap;
+- transpose;
+- replace;
+- insert before/after;
+- structural search;
+- structural query based on binding or operator where analysis permits;
+- evaluate/compile selected structure;
+- show macroexpansion;
+- show inferred/declared type information;
+- show source users.
+
+Interlisp historically enabled source structure editing while remaining inside Lisp, which made edit-and-continue workflows natural.[fn:interlisp-timeline]
+
+** Definition browser
+
+The browser can start from any definition and show:
+
+- source;
+- live compiled object;
+- documentation;
+- owning system;
+- methods;
+- callers;
+- callees;
+- referenced globals;
+- compiler metadata;
+- source revision;
+- mutation history;
+- tests;
+- relevant events;
+- active stack frames currently executing it.
+
+** Masterscope-like semantic query
+
+The project SHOULD eventually provide a semantic code database inspired by Interlisp Masterscope, which historically supported queries over program relationships.[fn:interlisp-history]
+
+Modern queries might include:
+
+#+begin_example
+WHO CALLS WORLD-CHECKPOINT
+SHOW METHODS SPECIALIZED ON NETWORK-RESOURCE
+WHERE IS *ACTIVE-WORLD* BOUND
+SHOW DEFINITIONS CHANGED SINCE GENERATION 418
+SHOW ACTIVITIES CURRENTLY EXECUTING SYSTEM :EDITOR
+SHOW CONDITIONS SIGNALLED BY STORAGE CODE IN THE LAST HOUR
+#+end_example
+
+The query engine may combine static indexing and live runtime information.
+
+* Inspector
+
+** Inspector as universal object browser
+
+The inspector is a central Machine application.
+
+It can inspect ordinary CLOS instances, lists, arrays, hash tables, conditions, functions, classes, packages, runtime implementation objects, resources, services, activities, events, authorities, presentations, windows, generations, and persistent proxies.
+
+** Navigation
+
+Every displayed slot/value is itself a presentation.
+
+The user can descend into an object, move backward/forward through inspection history, pin objects, compare two objects, and open specialized views.
+
+** Mutation
+
+Where authority and type permit, the inspector may edit slots or invoke object-specific mutation commands.
+
+All such edits should enter history and use validation/restart protocols.
+
+** Specialized inspectors
+
+Generic inspection is always available, but types can provide specialized panels.
+
+A NETWORK-INTERFACE may show counters and addresses.
+
+An ACTIVITY may show stack, wait reason, authorities, resource usage, and supervisor.
+
+A DEFINITION may show source and compiler metadata.
+
+A WORLD may show generation, activity tree, stores, runtime, and health.
+
+* Debugger and break UI
+
+** Break windows
+
+An unhandled condition normally creates or raises a break window associated with the affected activity and session.
+
+The break window contains:
+
+- condition presentation;
+- restart list;
+- stack browser;
+- selected-frame bindings;
+- source view;
+- an Exec bound to the selected debugging context;
+- recent events;
+- optional agent analysis area.
+
+** Nested debugging
+
+If evaluation performed from a break signals another unhandled condition, the UI preserves the outer debugging context.
+
+This may produce a nested break window or a stack of debugger contexts.
+
+The user can explicitly unwind to any valid recovery boundary.
+
+** Live definition repair
+
+From a selected frame, the user can open the current definition, edit it, compile/install it, and retry or continue when possible.
+
+The debugger records this mutation through the same definition transaction/history machinery used outside debugging.
+
+** Fatal runtime boundary
+
+If the Lisp runtime itself cannot reliably maintain the debugger, control passes to the recovery architecture rather than attempting indefinite in-image repair.
+
+* Desktop and window management
+
+** Desktop object
+
+The desktop is an object associated with a SESSION.
+
+It owns:
+
+- visible windows;
+- z-order;
+- background;
+- global menus;
+- input focus;
+- cursor;
+- session status;
+- notification/event indicators;
+- layout history.
+
+** Window operations
+
+The user can:
+
+- move;
+- resize;
+- raise/lower;
+- hide/show;
+- close;
+- duplicate appropriate views;
+- tile manually or via commands;
+- save a layout as session state.
+
+No modern desktop metaphor such as application launchers, docks, or taskbars is required.
+
+A simple global/system menu and object browser is sufficient.
+
+** Status
+
+A compact status region MAY show:
+
+- current world/generation;
+- time;
+- activity/CPU state;
+- network state;
+- pending conditions;
+- agent activity;
+- session identity.
+
+Status items should themselves be presentations where useful.
+
+* File and storage browser
+
+Files remain an important compatibility and source-storage concept, so the Machine has a graphical file browser.
+
+The browser SHOULD expose FILE, DIRECTORY, PATHNAME, VOLUME, and filesystem objects rather than only strings.
+
+Operations include:
+
+- inspect;
+- open/edit;
+- copy/move;
+- rename;
+- delete with history/undo where feasible;
+- compare;
+- show version/source status;
+- mount/attach related volume;
+- show storage device;
+- show permissions/authority;
+- open a Unix compatibility action when explicitly desired.
+
+* Structured events instead of text logs
+
+** Event stream
+
+Subsystems emit EVENT objects.
+
+An event includes:
+
+- timestamp;
+- type;
+- severity/category;
+- originating activity;
+- related objects;
+- structured payload;
+- optional condition;
+- generation;
+- human-readable presentation.
+
+** Event browser
+
+The event browser can query by object relationships, not just substring.
+
+Examples:
+
+#+begin_example
+events involving #<NETWORK-INTERFACE wm0>
+conditions from #<SERVICE dns>
+definition changes by #<AGENT autolith>
+events since generation 510
+events caused by activity descendants of #<ACTIVITY mail>
+#+end_example
+
+Text search remains available.
+
+** External log compatibility
+
+Events may be exported to syslog, journal files, JSON, text, or remote telemetry.
+
+Those are projections of the typed event stream.
+
+* Documentation and help
+
+Documentation is integrated into the live environment.
+
+A symbol, command, presentation type, class, restart, or resource protocol should provide context-sensitive help.
+
+A help request from a debugger can include the selected function's lambda list and relevant condition/restart documentation, echoing the historical Interlisp practice of context-sensitive online help.[fn:interlisp-timeline]
+
+Documentation objects can link directly to definitions and source.
+
+* UI extensibility
+
+** UI definitions are live Lisp
+
+Window classes, commands, presentation types, menu definitions, renderers, and keymaps are ordinary live definitions.
+
+The user can inspect and redefine them.
+
+** Application integration
+
+A native Machine application normally provides:
+
+- model/state objects;
+- activities;
+- commands;
+- presentations;
+- one or more windows/views;
+- conditions/restarts;
+- persistent schema where needed.
+
+It does not need a separate OS-specific IPC protocol just to integrate with the desktop.
+
+** Visual discipline
+
+Applications SHOULD preserve the monochrome bitmap vocabulary.
+
+A hosted foreign application may display arbitrary graphics inside a compatibility window, but does not redefine native UI conventions.
+
+* Wayland compatibility
+
+** Purpose
+
+Wayland support exists to make development and ordinary use on a contemporary Unix/Wayland workstation convenient.
+
+It is not a design target for mapping Machine abstractions one-to-one onto Wayland abstractions.
+
+** Hosted mode
+
+In hosted mode:
+
+- the Machine opens a Wayland connection;
+- creates one main surface;
+- allocates a host pixel buffer;
+- expands/copies the canonical 1-bit desktop into that buffer;
+- translates pointer and keyboard events into Machine input events;
+- handles resize/fullscreen if desired;
+- optionally integrates clipboard protocols.
+
+The Machine's own window manager remains authoritative.
+
+** Optional interoperability
+
+Minimal clipboard and drag/drop text interoperability MAY be implemented.
+
+Native Wayland application embedding is outside the initial architecture.  A foreign program can instead run in a compatibility island and, if useful, be shown via a separately engineered bridge.
+
+** Native mode precedence
+
+The same world and UI code should run unchanged on a native NetBSD display backend.
+
+Applications must not test "am I on Wayland" to decide ordinary UI behavior.
+
+
+* Resident reasoning agent
+
+** Architectural role
+
+The Machine defines an optional AGENT subsystem.
+
+An agent is an activity or supervised activity group inside a world.  It is not the world, kernel, init system, authority root, or mandatory user interface.
+
+This relationship is deliberate:
+
+#+begin_example
+                      #<WORLD ...>
+                           |
+          +----------------+----------------+
+          |                |                |
+      human session    system activities   agent
+          |                |                |
+          +----------------+----------------+
+                           |
+                 objects and protocols
+#+end_example
+
+Autolith MAY be embedded as the initial or preferred AGENT implementation.
+
+The Machine MUST still boot, run applications, administer itself, debug ordinary failures, checkpoint, and recover when Autolith is absent or disabled.
+
+** Why an agent fits a Lisp machine
+
+A resident agent is consistent with the Lisp-machine tradition when it participates through reflective system semantics rather than replacing them.
+
+The agent can act as a modern extension of several historical ideas:
+
+- the Lisp listener;
+- the inspector;
+- the programmer's assistant/history;
+- DWIM-like correction;
+- context-sensitive help;
+- debugger assistance;
+- system administration;
+- code browsing and source analysis.
+
+The Machine gives it structured access to live state that ordinary external agents usually approximate by issuing shell commands and parsing text.
+
+** Agent protocol
+
+The base protocol SHOULD allow:
+
+#+begin_src lisp
+(agent-state agent)
+(start agent)
+(stop agent)
+(ask agent request &key context authorities)
+(cancel-request agent request-id)
+(agent-events agent)
+(agent-conversations agent)
+(agent-capabilities agent)
+#+end_src
+
+A provider/model protocol SHOULD be separate from the agent protocol so the embedded implementation can use a local model, remote provider, Autolith provider registry, or another backend.
+
+** Agent context
+
+The agent should receive a constructed context, not an unbounded raw heap traversal.
+
+Context can include presentations or stable handles to:
+
+- current user request;
+- selected UI objects;
+- current break condition;
+- source definitions;
+- recent events;
+- world/generation identity;
+- current activity;
+- project/system context;
+- memories;
+- documentation;
+- explicit user-selected resources.
+
+The context builder is inspectable Lisp code.
+
+** Agent operations derive from machine operations
+
+The preferred architecture is:
+
+#+begin_example
+                 Lisp protocol/command
+                        |
+       +----------------+----------------+
+       |                |                |
+   human menu       Lisp call       agent projection
+       |                |                |
+       +----------------+----------------+
+                        |
+                     object
+#+end_example
+
+A resource protocol declaration may provide enough metadata to derive an agent-callable operation schema.
+
+The project should avoid manually duplicating every machine operation as a separate agent-specific tool when the semantic operation already exists.
+
+** Deterministic semantic core
+
+The agent does not define how the Machine works.
+
+For example, the agent may decide that a conflicting route should be removed, but deterministic Lisp code implements route removal and validates its arguments.
+
+It should not ordinarily reason by composing strings such as:
+
+#+begin_example
+route delete ...
+ifconfig ...
+service ...
+#+end_example
+
+The Unix shell is available only through an explicit compatibility capability.
+
+** Object serialization at the model boundary
+
+A remote language model cannot receive a live Lisp pointer.
+
+The AGENT subsystem therefore projects objects into provider-visible descriptions containing:
+
+- stable opaque handle;
+- presentation type;
+- relevant fields;
+- current operations;
+- authority-limited relationships;
+- textual summary.
+
+A model response can reference the opaque handle in an operation call.  The Lisp agent runtime resolves it back to the live object and validates authority.
+
+Serialization belongs at the provider boundary, not between ordinary Machine subsystems.
+
+** Agent presentations
+
+Agent output itself should be part of the presentation system.
+
+If an agent mentions:
+
+#+begin_example
+#<NETWORK-INTERFACE wm0>
+#+end_example
+
+the UI should render it as a presentation referring to the same object, not as dead prose when possible.
+
+Proposed actions should be represented as action objects the user can inspect before authorizing.
+
+** Autolith embedding
+
+Autolith is an independent project and remains in its own repository.
+
+An integration module in the Machine repository MAY:
+
+- depend on an installed Autolith system;
+- instantiate an Autolith agent/provider object;
+- adapt Machine context to Autolith requests;
+- adapt Machine commands/protocols to Autolith tool definitions;
+- map Autolith conversation and memory persistence into Machine presentation/browsing facilities;
+- expose Autolith's live self-inspection as an ordinary agent resource;
+- use Autolith worker images/isolation facilities where compatible.
+
+Autolith's current architecture already owns a model loop, tools, conversations, authentication, live mutation, checkpoints, recovery, memories, named Lisp REPLs, and related facilities inside/around an SBCL image.[fn:autolith-readme][fn:autolith-guide]
+
+The Machine may reuse these capabilities rather than duplicate them, but their presence does not redefine the Machine's core abstractions.
+
+** Autolith source ownership
+
+Autolith source remains authoritative in the Autolith repository.
+
+The Machine integration should use a documented public integration interface or small adapter rather than copying Autolith wholesale.
+
+Machine-specific changes needed for embedding should preferably be expressed as upstreamable Autolith interfaces where they are generally useful.
+
+** Agent self-modification
+
+An embedded Autolith may retain its own =self.*= style facilities internally.
+
+From the Machine perspective, agent self-modification is a special case of DEFINITION mutation owned by the agent subsystem.
+
+A cleaner long-term interface is for both humans and agents to use the world's common definition transaction machinery.
+
+The Machine should be able to distinguish:
+
+- mutation of the agent implementation;
+- mutation of the Machine;
+- mutation of a user application;
+- mutation inside an experimental island.
+
+Each has separate authority and durability policy.
+
+** Agent authority
+
+The agent never receives root authority merely because it resides in the primary world.
+
+Typical baseline authority may permit:
+
+- inspect public Machine objects;
+- query source and definitions;
+- read selected project resources;
+- create bounded scratch objects;
+- ask semantic queries;
+- propose changes;
+- use its own conversation/memory stores.
+
+Additional authority may permit:
+
+- modify selected definitions;
+- run tests;
+- create experimental islands;
+- checkpoint the world;
+- configure selected resources;
+- invoke selected restarts;
+- run foreign commands.
+
+The current authority set is visible in the agent UI.
+
+** Proposed-action objects
+
+For consequential operations, the agent SHOULD be able to return an explicit proposal object:
+
+#+begin_src lisp
+#<PROPOSED-ACTION
+  agent=#<AGENT autolith>
+  operation=RECONFIGURE
+  target=#<NETWORK-INTERFACE wm0>
+  arguments=(...)
+  rationale="..."
+  required-authority=#<...>>
+#+end_src
+
+The human may inspect, modify, approve, reject, or grant temporary authority.
+
+The history records the resulting action separately from the model's prose.
+
+** Routine autonomous recovery
+
+The system MAY define policies allowing an agent to invoke bounded restarts autonomously.
+
+Examples might include retrying a transient connection or restarting an explicitly designated noncritical indexing activity.
+
+Such policy is expressed as inspectable Lisp objects and authority, not hidden model prompt convention.
+
+** Agent failure
+
+The agent is just another supervised subsystem.
+
+Provider outage, invalid response, context serialization failure, agent bug, exhausted quota, or model refusal MUST leave the rest of the Machine operating.
+
+The agent window reports the condition and available restarts.
+
+** Offline operation
+
+An agent implementation MAY be local/offline.
+
+No core Machine protocol assumes internet availability.
+
+* Compatibility environment
+
+** Purpose
+
+Unix compatibility exists because real software ecosystems are useful.
+
+The compatibility environment makes conventional NetBSD/POSIX programs available without promoting Unix abstractions into the Machine's primary ontology.
+
+** Unix island
+
+The preferred model is a UNIX-ENVIRONMENT object backed by an island or carefully bounded substrate context.
+
+It exposes:
+
+- processes;
+- environment variables;
+- cwd;
+- stdio;
+- Unix credentials;
+- path lookup;
+- shell;
+- ptys;
+- signals;
+- foreign executables.
+
+These are explicitly compatibility objects.
+
+** Foreign process object
+
+Running a foreign executable returns:
+
+#+begin_src lisp
+#<FOREIGN-PROCESS ...>
+#+end_src
+
+rather than forcing the caller to manage a raw pid.
+
+The object exposes:
+
+- status;
+- argv;
+- environment;
+- stdio streams;
+- exit condition;
+- resource usage;
+- island;
+- signals/termination operations;
+- recent output as typed stream/history.
+
+** Shell
+
+A Unix shell MAY be available in a compatibility terminal window.
+
+The visual framing should make clear that the user has entered a Unix compatibility environment.
+
+The shell is not needed for ordinary Machine administration.
+
+** Terminal emulator
+
+A PTY terminal emulator MAY exist for foreign applications.
+
+Native Lisp Exec windows should not be implemented as terminal emulators.
+
+** Foreign filesystem assumptions
+
+Foreign programs receive conventional paths and filesystem semantics.
+
+Native Machine objects can translate to compatible paths only when a meaningful underlying file exists.
+
+No attempt is made to map arbitrary services, activities, or Lisp objects into pseudo-files merely to satisfy a Unix metaphor.
+
+** Unix service compatibility
+
+If a conventional NetBSD daemon is useful, the Machine can supervise its FOREIGN-PROCESS object and present a SERVICE wrapper.
+
+This wrapper marks the service as foreign and preserves access to stdout/stderr, exit status, config files, and underlying process.
+
+A native service should not be forced into this model.
+
+** X11/Wayland applications
+
+Support for foreign graphical programs is optional and can be deferred.
+
+Possible implementations include:
+
+- running a nested X server or Wayland compositor in an island;
+- forwarding a foreign window into a Machine bitmap window;
+- opening it as an ordinary host-side window in hosted mode.
+
+None of these are core UI semantics.
+
+* System configuration
+
+** Configuration objects
+
+Configuration is represented as typed objects, definitions, or persistent schemas.
+
+Examples:
+
+#+begin_src lisp
+#<NETWORK-CONFIGURATION ...>
+#<DISPLAY-CONFIGURATION ...>
+#<BOOT-POLICY ...>
+#<CHECKPOINT-POLICY ...>
+#<AGENT-POLICY ...>
+#+end_src
+
+Configuration changes use validation, history, conditions, and transactions.
+
+** Human-readable source
+
+Some configuration SHOULD also have a readable source representation for reconstruction and version control.
+
+This might be Lisp data/forms:
+
+#+begin_src lisp
+(define-network-configuration workstation
+  (:interface "wm0"
+   :address :dhcp)
+  (:resolver :automatic))
+#+end_src
+
+The live configuration object and its durable source provenance are linked.
+
+** Dynamic configuration
+
+Editing configuration can take effect immediately when the affected subsystem supports it.
+
+A service can signal a condition with restarts when a requested live reconfiguration cannot be applied without disruption.
+
+* Native application model
+
+** Application meaning
+
+A native application is a coherent set of definitions, objects, activities, views, presentations, commands, persistence, and conditions inside the world.
+
+It is not required to own a separate address space.
+
+** Application lifecycle
+
+An application may be "opened" by creating or revealing its principal views and session objects.
+
+Closing all windows does not necessarily destroy its service or data objects.
+
+Applications declare their own lifecycle semantics.
+
+** Application installation
+
+A native application distribution SHOULD describe:
+
+- Lisp system/source identity;
+- dependencies;
+- definitions;
+- optional persistent schema;
+- optional services;
+- commands;
+- presentation types;
+- UI resources/bitmap fonts/icons;
+- migration rules;
+- compatibility requirements;
+- authority requests.
+
+Installation loads or makes these available to a world.
+
+** Application failure
+
+An unhandled application condition normally affects its activity and opens a debugger or follows its supervisor policy.
+
+It should not require restarting the entire world unless shared-state corruption is suspected.
+
+* Scheduled and background work
+
+** Persistent jobs
+
+The Machine should expose scheduled work as objects:
+
+#+begin_src lisp
+#<SCHEDULED-ACTIVITY backup-home
+  schedule=...
+  next-run=...
+  authority=...>
+#+end_src
+
+This replaces the need for cron as the native abstraction.
+
+** Event-triggered work
+
+Activities may wait on semantic events, resource state changes, timers, or external events through substrate event sources.
+
+The scheduler/runtime can use =kqueue= underneath.
+
+** Inspection
+
+The user can inspect all scheduled activities, their histories, next run times, failures, authorities, and supervisors from one browser.
+
+* Networking and remote interaction
+
+** Remote Machine protocol
+
+A future remote interaction protocol SHOULD expose typed Machine operations rather than requiring SSH plus shell parsing.
+
+A remote Lisp session may interact with a proxy world using the same presentation and authority ideas used by islands.
+
+** SSH compatibility
+
+SSH remains useful for recovery and compatibility.
+
+A minimal system may run sshd beneath the abstraction horizon or expose a foreign service.
+
+The canonical remote experience, if developed, should be a Lisp-aware session rather than a shell.
+
+** Object handles over the network
+
+Stable remote handles must be scoped, expiring where appropriate, and checked by authority.
+
+The system should never serialize arbitrary executable Lisp objects from an untrusted remote peer and load them blindly.
+
+
+* Human sessions and personal-machine assumptions
+
+** Personal workstation default
+
+The initial Machine is optimized for a personal workstation.
+
+A principal local user may possess broad authority and may deliberately choose a highly open world resembling historical Lisp machines.
+
+The architecture nevertheless keeps SESSION and AUTHORITY explicit so that agent activity, remote access, untrusted code, and later multi-user operation do not require redesigning every subsystem.
+
+** Session objects
+
+A SESSION owns or references:
+
+- human identity;
+- current authority set;
+- desktop;
+- windows;
+- input focus;
+- listener histories;
+- clipboard;
+- UI preferences;
+- selected world;
+- debugger contexts;
+- optional agent conversation focus.
+
+Logging out a session need not terminate world services.
+
+** Identity
+
+The Machine may initially map one Lisp-level human identity to the underlying NetBSD boot user or root substrate as an implementation shortcut.
+
+The visible API should not hard-code Unix uid semantics.
+
+A future identity system can represent people, remote principals, services, and agents as typed subjects in the authority graph.
+
+* Boot experience
+
+** Normal boot
+
+The desired normal boot experience is:
+
+#+begin_example
+firmware/bootloader
+      |
+NetBSD kernel messages, optionally hidden after early development
+      |
+minimal Lisp substrate startup
+      |
+load selected world
+      |
+monochrome desktop appears
+      |
+restore principal session
+#+end_example
+
+The user does not land at a shell prompt and manually launch the environment.
+
+** Boot selector
+
+A boot key/chord or failed validation can enter a simple generation/world selector.
+
+The selector may initially be text-mode for robustness.
+
+It lists:
+
+- normal selected world;
+- recent generations;
+- recovery world;
+- safe start with optional services disabled;
+- source reconstruction.
+
+** Safe start
+
+Safe start loads the selected world while suppressing optional startup activities such as:
+
+- resident agent;
+- user application autostarts;
+- foreign compatibility services;
+- network-facing services;
+- recently installed extensions.
+
+This provides a middle ground between normal boot and pristine recovery.
+
+** Boot progress
+
+Boot progress SHOULD be expressed as structured phases and events.
+
+If the UI is available, the user can inspect a failed phase instead of reading an undifferentiated scrolling console.
+
+* Core native system services
+
+The initial Machine will need a small set of native services.  Their precise decomposition is implementation-specific, but the semantic functions include:
+
+** Machine inventory service
+
+Discovers substrate resources and maintains corresponding Lisp objects.
+
+It tracks device arrival/removal where NetBSD supports it and emits structured events.
+
+** Event service
+
+Maintains world event streams, persistence policy, subscriptions, and event browser queries.
+
+** Definition/source service
+
+Maintains live definition provenance, source indexing, compiler integration, mutation lineage, and semantic code queries.
+
+** Persistence service
+
+Coordinates persistent object stores, generation manifests, checkpoints, reconstruction recipes, and retention.
+
+** Activity supervisor
+
+Maintains the principal supervision graph and system activity browser.
+
+** Network service
+
+Maintains normalized network resources/configuration and exposes connection/listener protocols.
+
+** Storage service
+
+Maintains volume/filesystem objects and coordinates storage events.
+
+** Display/input service
+
+Owns the logical framebuffer, input devices, window manager, sessions, presentations, fonts, and clipboard.
+
+** Documentation service
+
+Indexes definitions and manuals and answers context-sensitive help requests.
+
+** Agent service
+
+Optional.  Owns registered AGENT implementations and provider/session integration.
+
+** Compatibility service
+
+Optional.  Owns Unix islands, foreign processes, PTYs, and foreign application bridges.
+
+* The "is this really a Lisp machine?" acceptance tests
+
+The system should be evaluated by semantic tests rather than by the percentage of code written in Lisp.
+
+** No-shell administration test
+
+Disable or remove the Unix shell from the principal session.
+
+The user must still be able to:
+
+- discover hardware;
+- inspect CPU and memory state;
+- configure networking;
+- inspect routes and connections;
+- attach/mount storage;
+- browse and edit files;
+- inspect services;
+- start/stop/restart native services;
+- inspect activities;
+- schedule work;
+- install/load native Lisp software;
+- inspect structured system events;
+- diagnose ordinary failures;
+- edit and recompile a running service;
+- create a checkpoint;
+- roll back or fork a generation;
+- shut down/reboot;
+- enter recovery.
+
+Passing this test is a major architectural milestone.
+
+** No-textual-glue test
+
+Inspect core subsystem boundaries.
+
+Ordinary communication among native components should pass Lisp objects, typed values, events, conditions, and protocol calls.
+
+A design that repeatedly emits text and reparses it to connect native Machine components fails this test even if every parser is written in Lisp.
+
+** Live-repair test
+
+Cause a recoverable error inside a native service.
+
+The Machine should:
+
+1. preserve the failing activity;
+2. open a break/debugger context;
+3. expose the live condition and related objects;
+4. allow source inspection;
+5. allow definition repair;
+6. compile/install the repair;
+7. allow retry/continue or a semantic restart;
+8. record the mutation and history.
+
+A mandatory edit-build-install-restart cycle for ordinary Lisp service bugs fails the intended model.
+
+** Object-presentation test
+
+Evaluate an expression returning a system resource.
+
+The visible result should be usable as that object in a subsequent command by pointing/selecting, with operations based on its presentation type.
+
+Copying its printed name into another parser is only the fallback representation.
+
+** Agent-absence test
+
+Remove all agent packages and network provider credentials.
+
+The Machine must still satisfy its core boot, UI, administration, programming, debugging, persistence, and recovery requirements.
+
+** Agent-integration test
+
+Install Autolith or another AGENT.
+
+The agent should be able to receive a presentation/context referring to a live object, inspect it within authority, propose a typed operation, and have the same deterministic Machine protocol perform the operation that a human UI command would invoke.
+
+** Compatibility-boundary test
+
+Run a conventional Unix command in the compatibility environment.
+
+Its pid, fds, argv, environment, and textual streams may be visible inside the foreign process inspector.
+
+Those concepts should not leak into native service/application APIs unless the programmer explicitly asks for the foreign-process substrate.
+
+** World-generation test
+
+Checkpoint a running world, modify definitions and persistent objects, then:
+
+- inspect both generation manifests;
+- boot the older generation;
+- fork it without destroying the newer lineage;
+- reconstruct a generation without relying solely on its heap dump.
+
+** Recovery-independence test
+
+Break the selected active world sufficiently that it cannot boot.
+
+With networking disabled and Autolith absent, boot recovery, inspect the crash capsule and generation history, select or reconstruct a known-good world, and return to normal operation.
+
+** Hosted/native UI equivalence test
+
+Run the same world first in a Wayland host surface and then on a native NetBSD display backend.
+
+The Lisp desktop, windows, presentations, editor, Exec, debugger, and application semantics should remain unchanged.
+
+* Engineering scope boundaries
+
+The project spends effort where Lisp-machine semantics are visible and reuses NetBSD where low-level reinvention would not improve those semantics.
+
+The initial design therefore treats the following as substrate responsibilities:
+
+- CPU scheduling primitives;
+- SMP;
+- virtual memory and page fault handling;
+- hardware drivers;
+- PCI/USB/NVMe/SATA attachment;
+- Ethernet/Wi-Fi driver mechanics;
+- IP/TCP/UDP kernel networking;
+- filesystems;
+- block I/O;
+- low-level power/ACPI support;
+- security mechanisms used to enforce islands;
+- bootloader mechanics.
+
+The project focuses its novel engineering on:
+
+- live world semantics;
+- Lisp-level resource model;
+- activities and supervision;
+- authority;
+- conditions/restarts and debugger integration;
+- source/definition provenance;
+- persistence/generations/recovery;
+- monochrome Lisp desktop;
+- object presentations;
+- editors/browsers/inspector;
+- semantic administration;
+- native application model;
+- agent integration.
+
+This division is the reason to use NetBSD rather than writing a kernel first.
+
+* Proposed repository architecture
+
+This project belongs in its own repository.
+
+The repository name is intentionally unspecified here.
+
+A possible top-level layout is:
+
+#+begin_example
+machine/
+  boot/
+  runtime/
+    protocol/
+    sbcl/
+    ccl/
+  netbsd/
+    substrate/
+    display/
+    input/
+    build/
+  world/
+  activity/
+  authority/
+  resource/
+  condition/
+  history/
+  source/
+  persistence/
+  recovery/
+  presentation/
+  ui/
+    bitmap/
+    windows/
+    exec/
+    editor/
+    inspector/
+    debugger/
+    browser/
+  services/
+    machine/
+    event/
+    storage/
+    network/
+    documentation/
+  agent/
+    protocol/
+    autolith/
+  compatibility/
+    unix/
+    pty/
+  applications/
+  tests/
+  docs/
+#+end_example
+
+This is a decomposition aid, not a required package-per-directory policy.
+
+** Package policy
+
+Common Lisp packages should express meaningful public namespace boundaries without fragmenting the environment gratuitously.
+
+A possible family is:
+
+#+begin_example
+MACHINE
+MACHINE.RUNTIME
+MACHINE.WORLD
+MACHINE.ACTIVITY
+MACHINE.AUTHORITY
+MACHINE.RESOURCE
+MACHINE.PRESENTATION
+MACHINE.UI
+MACHINE.SOURCE
+MACHINE.PERSISTENCE
+MACHINE.RECOVERY
+MACHINE.AGENT
+MACHINE.COMPAT
+#+end_example
+
+Subsystems may share internal packages where that improves live development.
+
+** Autolith adapter ownership
+
+Only the adapter belongs in this repository.
+
+For example:
+
+#+begin_example
+agent/autolith/
+  adapter.lisp
+  context.lisp
+  tool-projection.lisp
+  ui.lisp
+#+end_example
+
+The actual Autolith source remains external.
+
+* Build and distribution
+
+** Reproducible substrate inputs
+
+A release SHOULD record:
+
+- NetBSD source/release identity;
+- kernel configuration;
+- Machine source revision;
+- selected Common Lisp implementation version;
+- implementation source identity where retained;
+- Lisp dependency lock;
+- native library versions;
+- base world build identity.
+
+** NetBSD build
+
+NetBSD's cross-build tooling can build a target kernel and userland from another platform.[fn:netbsd-build]
+
+The project should eventually automate creation of:
+
+- target kernel;
+- minimal root filesystem;
+- selected Lisp runtime;
+- Machine source or preloaded world;
+- recovery world;
+- boot selector/bootstrap;
+- fonts/bitmap UI assets.
+
+** Development hosted mode
+
+For rapid iteration, developers SHOULD be able to run the Machine as a normal process on an existing NetBSD or supported Unix host with a Wayland or other simple display backend.
+
+Hosted mode retains the same world protocols but may borrow more host facilities below the abstraction horizon.
+
+** Native image
+
+The native distribution boots NetBSD directly into the Lisp Machine environment.
+
+The user should not need to install a conventional NetBSD desktop.
+
+* Testing strategy
+
+** Protocol tests
+
+Every core generic protocol should have implementation-independent tests using mock objects where possible.
+
+** Runtime conformance
+
+Each runtime adapter has a conformance suite covering:
+
+- activity creation/interruption;
+- stack/source inspection;
+- compilation/live definition replacement;
+- FFI behavior;
+- image saving/loading where supported;
+- runtime identity/compatibility checks;
+- island creation;
+- debugger hooks.
+
+** Substrate conformance
+
+NetBSD adapter tests cover resource discovery, kqueue integration, files, sockets, networking configuration, storage operations, display/input, and shutdown.
+
+** World tests
+
+World tests cover:
+
+- startup phases;
+- supervision;
+- authority;
+- history;
+- persistent stores;
+- generation selection;
+- reconstruction;
+- safe start;
+- recovery.
+
+** UI tests
+
+The 1-bit logical framebuffer makes deterministic pixel tests practical.
+
+A headless backend can verify:
+
+- window geometry;
+- bitblt;
+- text drawing;
+- menus;
+- presentation hit testing;
+- event routing;
+- debugger window creation;
+- editor structural operations.
+
+Golden bitmaps MAY be used sparingly where semantics are stable.
+
+** Fault injection
+
+The project should deliberately inject:
+
+- storage errors;
+- network errors;
+- activity conditions;
+- failed live mutations;
+- corrupt generation manifests;
+- incompatible runtime images;
+- agent/provider failure;
+- broken optional startup service;
+- killed islands.
+
+Recovery behavior is a core feature and must be tested continuously.
+
+* Implementation sequence
+
+The phases below preserve architectural direction while allowing early useful systems.
+
+** Phase 0: hosted semantic prototype
+
+Run on ordinary NetBSD or another Unix host using SBCL or CCL.
+
+Implement:
+
+- runtime protocol skeleton;
+- WORLD;
+- ACTIVITY;
+- RESOURCE;
+- EVENT;
+- basic AUTHORITY;
+- generic inspector;
+- Lisp Exec;
+- source definition browser;
+- minimal generation metadata;
+- headless or simple hosted display.
+
+Goal: prove that native subsystems can operate without shell/text glue.
+
+** Phase 1: monochrome desktop
+
+Implement the canonical 1-bit graphics/window system:
+
+- logical framebuffer;
+- bitmap fonts;
+- Wayland hosted backend or simplest useful host backend;
+- mouse/keyboard input;
+- overlapping windows;
+- menus;
+- Exec;
+- inspector;
+- basic source editor;
+- presentation system.
+
+Goal: daily development can happen inside the Machine UI.
+
+** Phase 2: NetBSD machine substrate
+
+Implement NetBSD mappings for:
+
+- machine inventory;
+- network interfaces/routes;
+- files/volumes;
+- kqueue event integration;
+- display/input native path where practical;
+- reboot/shutdown.
+
+Goal: administer a NetBSD host semantically from Lisp without shell commands for the covered resources.
+
+** Phase 3: live development environment
+
+Implement:
+
+- definition metadata/provenance;
+- integrated compile/install;
+- structural editor;
+- debugger break windows;
+- stack/source integration;
+- mutation history;
+- semantic code queries.
+
+Goal: modify the Machine from inside itself and continue.
+
+** Phase 4: persistence and recovery
+
+Implement:
+
+- runtime image adapter for chosen runtime;
+- generation manifests;
+- reconstructible mutation lineage;
+- world registry;
+- pristine recovery world;
+- safe start;
+- crash capsules;
+- fork/rollback UI.
+
+Goal: self-modification becomes durable and recoverable.
+
+** Phase 5: native boot
+
+Build a minimal NetBSD image that boots directly into the Machine.
+
+Implement or harden:
+
+- bootstrap/init;
+- root layout;
+- native display/input;
+- normal/recovery selection;
+- clean shutdown.
+
+Goal: a machine can be used without seeing conventional Unix during ordinary operation.
+
+** Phase 6: applications and compatibility
+
+Implement:
+
+- file browser;
+- network browser;
+- event browser;
+- scheduled activities;
+- Unix island;
+- foreign process/PTY;
+- software/system browser.
+
+Goal: practical daily use while preserving the semantic boundary.
+
+** Phase 7: resident agent
+
+Define/finalize AGENT protocols and embed Autolith through an adapter.
+
+Integrate:
+
+- presentation-aware agent context;
+- authority-scoped operation projection;
+- proposed-action objects;
+- debugger assistance;
+- semantic code browsing;
+- optional recovery assistance;
+- agent conversations/memories in the UI.
+
+Goal: the agent becomes a native reasoning participant in the live world rather than a shell-driving external automation.
+
+** Phase 8: deeper Lisp-machine behavior
+
+Develop:
+
+- Masterscope-like semantic queries;
+- richer selective undo;
+- persistent world/session continuity;
+- richer object-aware copy/paste;
+- remote Machine sessions;
+- stronger islands/capabilities;
+- optional local agent providers;
+- runtime portability across SBCL and CCL.
+
+* Detailed design decisions
+
+** DD-001: Kernel choice
+
+Decision: use the NetBSD kernel and its driver ecosystem.
+
+Reason: retain mature hardware, VM, VFS, network, scheduler, and driver engineering while replacing visible userland semantics.
+
+** DD-002: Common Lisp implementation
+
+Decision: implementation-neutral architecture.
+
+SBCL and CCL are both valid.  The implementor chooses based on target and required facilities.
+
+** DD-003: New repository
+
+Decision: the Machine is a separate project/repository.
+
+Autolith remains separate and may be embedded.
+
+** DD-004: Live world
+
+Decision: the live Lisp world is the primary system environment.
+
+Programs and services are normally extensions of the world rather than isolated executables.
+
+** DD-005: Isolation
+
+Decision: shared object space is the default semantic model; islands are explicit containment mechanisms.
+
+** DD-006: Persistence
+
+Decision: combine live images with reconstructible source/mutation lineage and separate persistent stores.
+
+** DD-007: Recovery
+
+Decision: recovery is a separate pristine world and never requires an agent or network.
+
+** DD-008: Agent
+
+Decision: resident reasoning is optional and subordinate to Machine semantics.
+
+Autolith is a permitted embedded implementation.
+
+** DD-009: Authority
+
+Decision: define Lisp-level authority/capability objects.
+
+Use NetBSD enforcement underneath where hostile-code containment requires it.
+
+** DD-010: UI
+
+Decision: canonical monochrome Xerox PARC/Interlisp-D-derived bitmap desktop.
+
+** DD-011: Wayland
+
+Decision: Wayland is an optional host/display transport.
+
+The Machine's own window system remains authoritative.
+
+** DD-012: Object presentations
+
+Decision: visible output may retain semantic association with live objects and typed input contexts.
+
+** DD-013: Conditions
+
+Decision: ordinary failures preserve live computations and expose debugger/restart interaction.
+
+** DD-014: Administration
+
+Decision: administration uses Lisp objects/protocols and the same inspector/debugger/history as programming.
+
+** DD-015: Filesystem
+
+Decision: files/pathnames remain first-class useful resources but are not the universal object namespace.
+
+** DD-016: Unix compatibility
+
+Decision: conventional Unix remains available through explicit compatibility facilities below/alongside the Machine, not as native application semantics.
+
+** DD-017: Compiler
+
+Decision: compiler and source facilities are integral system components expected to be present during ordinary operation.
+
+** DD-018: History
+
+Decision: structured history, replay, and undo are system-wide programming/administration concepts inspired by Interlisp's Programmer's Assistant.
+
+* Historical lineage
+
+This design consciously draws from several historical systems while targeting Common Lisp and contemporary hardware.
+
+** Interlisp / Interlisp-D / Medley
+
+The strongest UI and interactive-programming influence.
+
+Relevant ideas include:
+
+- programming entirely inside Lisp;
+- live editing of running definitions;
+- the Executive;
+- Break package and break windows;
+- graphical overlapping windows;
+- mouse-driven interaction;
+- structure editors;
+- history, replay, and undo;
+- DWIM-style cooperative correction;
+- Masterscope-like semantic code queries;
+- context-sensitive documentation;
+- integrated compiler/debugger/editor.
+
+The Interlisp project documents the evolution from early structure editing and break facilities through history/DWIM and display-oriented programming to Interlisp-D.[fn:interlisp-timeline][fn:interlisp-history]
+
+** Symbolics Genera
+
+The strongest influence for shared-world concurrency and typed presentations.
+
+Relevant ideas include:
+
+- processes sharing one Lisp object address space;
+- rich direct interactivity among processes through shared Lisp objects;
+- world-oriented system images;
+- presentation types connecting displayed output to semantic objects;
+- dynamic windows with output history;
+- integrated development and administration.
+
+Symbolics documentation explicitly describes all processes sharing one virtual address space and communicating through shared Lisp objects.[fn:symbolics-processes]  Its UI documentation describes presentation types and dynamic windows with retained output history.[fn:symbolics-ui]
+
+Open Genera is also useful precedent that a Lisp-machine UI can be hosted through an external display protocol while preserving its own programmer-facing interface.  Open Genera used X as an implementation mechanism for its UI on host systems.[fn:open-genera]
+
+** Autolith
+
+Autolith is contemporary prior art owned independently by its repository.
+
+Relevant mechanisms include:
+
+- a Common Lisp agent living inside a Lisp image;
+- persistent conversations and memories;
+- Lisp-first interaction;
+- live self-inspection and definition mutation;
+- private reconstructible mutation history;
+- saved generations/checkpoints;
+- isolated Lisp worker images;
+- matching implementation-source inspection;
+- separate recovery image;
+- restricted recovery diagnosis;
+- provider/tool registry;
+- explicit permission modes and immutable mode.
+
+The Machine may embed Autolith and adapt those proven mechanisms where useful.[fn:autolith-readme][fn:autolith-guide]
+
+* Open design questions
+
+These questions are intentionally left for implementation experiments.
+
+** Runtime checkpoint semantics
+
+SBCL and CCL differ in saved-image behavior and runtime internals.
+
+The runtime protocol must establish the minimum portable generation semantics and let exact heap continuity be implementation-specific.
+
+** Persistent object store
+
+The appropriate default object store is unresolved.
+
+Requirements should be tested before selecting an embedded database or designing a custom one.
+
+** Authority implementation
+
+The semantic model is specified, but the exact mix of in-heap object capabilities and NetBSD-enforced islands requires prototyping.
+
+** Native NetBSD display path
+
+The best modern NetBSD path for a direct monochrome desktop depends on target hardware and available kernel/display interfaces.
+
+The UI's backend abstraction deliberately postpones this choice.
+
+** Image/world scope
+
+It remains to be determined which activities and session state should be preserved in exact generations versus reconstructed from durable objects.
+
+** Multiple worlds
+
+The first release may permit only one active principal world plus recovery and islands.
+
+A later system might run multiple peer worlds or support fast world switching.
+
+** Common Lisp standard extensions
+
+The system will need implementation-independent interfaces beyond ANSI Common Lisp for threading, source locations, FFI, weak pointers, and images.
+
+Whether to use existing portability libraries or define narrow project protocols around implementation primitives should be decided per subsystem.
+
+** Source control integration
+
+Git is an obvious underlying source store, but the Machine UI should operate on definitions, systems, histories, and revisions rather than exposing Git command syntax as its semantic API.
+
+** Native package/distribution model
+
+ASDF provides a useful base for Lisp systems.  The exact native "install/update application" workflow remains to be designed around source identity, generations, migrations, and authority.
+
+** Agent protocol stability
+
+Autolith is evolving independently.
+
+The Machine should keep its AGENT protocol small enough that the adapter can follow Autolith without making either repository depend on internal details of the other.
+
+* First concrete vertical slice
+
+The best early proof is a thin system that exercises the intended ontology end to end.
+
+Build:
+
+1. a hosted SBCL or CCL world;
+2. a 1-bit Wayland-hosted framebuffer;
+3. overlapping Lisp windows;
+4. an Exec;
+5. generic inspector;
+6. presentation system;
+7. NetBSD network-interface resource objects;
+8. a network browser;
+9. an ACTIVITY browser;
+10. break window/debugger integration;
+11. one live editable native service;
+12. basic history;
+13. one generation/checkpoint implementation;
+14. optional Autolith adapter with inspect-only authority.
+
+Demonstration:
+
+- boot/run the world;
+- evaluate =(network-interfaces *machine*)= in the Exec;
+- click the =wm0= presentation;
+- inspect/configure it through native Lisp protocols;
+- start a native network-monitor service;
+- deliberately introduce a bug;
+- receive a break window;
+- inspect the condition and stack;
+- edit/recompile the definition;
+- invoke retry;
+- checkpoint the repaired world;
+- ask embedded Autolith to explain the relevant service and recent condition using typed object context;
+- reboot/load the generation;
+- perform the same interaction with no shell.
+
+If this vertical slice feels coherent, the project has demonstrated its core thesis before attempting the full operating environment.
+
+* References and notes
+
+[fn:netbsd-build] NetBSD Guide, "Crosscompiling NetBSD with build.sh".  NetBSD documents =build.sh= as the framework for building a kernel and userland for native or different target platforms.  [[https://www.netbsd.org/docs/guide/en/chap-build.html][NetBSD Guide: Building the system]]
+
+[fn:autolith-readme] Lucius Magn / Autolith repository README.  Current Autolith describes itself as a Common Lisp terminal agent owning its model loop, tools, conversations, authentication, live mutation, checkpoints, and recovery, with saved generations and worker images on SBCL.  [[https://github.com/luciusmagn/autolith][github.com/luciusmagn/autolith]]
+
+[fn:autolith-guide] Autolith Guide.  Documents Lisp-first interaction, =self.*= inspection/mutation, private reconstructible image commits, saved generations, named isolated Lisp REPLs, pristine recovery image, and restricted crash diagnosis.  [[https://github.com/luciusmagn/autolith/blob/master/docs/guide.org][Autolith Guide]]
+
+[fn:interlisp-timeline] Medley Interlisp Project, "Interlisp Timeline".  Documents the development of Break, live structure editing, DWIM, history and selective undo, display-oriented windows, Interlisp-D, and the integrated programming environment.  [[https://interlisp.org/history/timeline/][Interlisp Timeline]]
+
+[fn:interlisp-history] Warren Teitelman, "A History of Interlisp".  Discusses structure editing, display-oriented programming, Interlisp-D, Masterscope, and the integrated programming-environment lineage.  [[https://interlisp.org/documentation/History_of_Interlisp.pdf][A History of Interlisp]]
+
+[fn:medley-primer] "Medley for the Novice", Release 2.0.  Its Break Package chapter describes a separate break window for each break, with Executive functionality, stack/variable inspection, editor invocation, and nested breaks.  [[https://interlisp.org/documentation/Medley-Primer.pdf][Medley for the Novice]]
+
+[fn:symbolics-processes] Symbolics Genera 8, "Internals", Scheduler section.  It states that processes on a Symbolics computer run in the same virtual address space and share Lisp objects, allowing communication through those objects.  [[https://www.bitsavers.org/pdf/symbolics/software/genera_8/Internals.pdf][Symbolics Genera Internals]]
+
+[fn:symbolics-ui] Symbolics Genera 8, "Programming the User Interface".  Documents presentation types, presentation input contexts, mouse handlers, Dynamic Windows, output history, and viewports.  [[https://bitsavers.org/pdf/symbolics/software/genera_8/Programming_the_User_Interface.pdf][Programming the User Interface]]
+
+[fn:open-genera] Symbolics, "Open Genera User's Guide".  Describes Open Genera's supported Lisp UI interfaces being implemented using an X server on host systems, useful precedent for treating an external window system as a transport/implementation mechanism rather than the Lisp environment's semantic window model.  [[https://www.bitsavers.org/pdf/symbolics/software/genera_8/Open_Genera_User_s_Guide.pdf][Open Genera User's Guide]]
+
+* Condensed architectural statement
+
+For future readers, the complete design can be summarized without reducing its requirements to a slogan:
+
+The project is a new, independent Common Lisp machine environment using NetBSD as a hidden kernel and driver substrate.  It may run on SBCL, CCL, or another capable Common Lisp through a runtime abstraction.  The primary operating-system state is a live world of Lisp objects, definitions, activities, resources, services, conditions, restarts, events, presentations, and authorities.  Native activities share objects by default; explicit islands provide isolation.  The compiler, editor, debugger, inspector, administration environment, and applications are part of the same live system.  Persistence combines saved generations with source identity, reconstructible mutation history, and separate persistent object stores.  A pristine recovery world can repair or select generations without network access or an agent.  The canonical UI is a black-and-white Interlisp-D/Medley-derived bitmap desktop with overlapping Lisp windows, Execs, structure/source editors, inspectors, browsers, and break windows.  Wayland may host the desktop as a compatibility transport but does not define its window model.  Object presentations preserve semantic identity across the UI.  Unix processes, fds, shells, environment variables, and text-pipe composition are compatibility/substrate concepts rather than native application primitives.  An optional resident agent participates through the same object protocols and explicit authority system; Autolith may implement this agent in an adapter while remaining an independent repository.  The Machine is considered successful when ordinary operation, administration, programming, debugging, live repair, checkpointing, and recovery can be performed entirely inside the Lisp world without relying on a shell or reducing system state to strings.
