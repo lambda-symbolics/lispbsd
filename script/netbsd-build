@@ -1,0 +1,21 @@
+#!/bin/sh
+# Cross-build NetBSD/amd64 from the reference source tree.
+#
+# Usage: script/netbsd-build [build.sh arguments...]
+#
+# Default arguments build the host tools and the GENERIC kernel. Pass
+# "-U release" to also build distribution sets and install media.
+set -eu
+
+NETBSD_SRC=${NETBSD_SRC:-/root/common-lisp/refs/netbsd-src}
+NETBSD_OBJ=${NETBSD_OBJ:-/root/common-lisp/refs/netbsd-obj}
+NETBSD_TOOLS=${NETBSD_TOOLS:-/root/common-lisp/refs/netbsd-tools}
+JOBS=${JOBS:-$(nproc)}
+
+# The netbsd-10 branch predates host compilers that reject old-style
+# incompatible pointer declarations as hard errors; relax exactly those.
+HOST_CFLAGS="-O -Wno-error=incompatible-pointer-types -Wno-error=int-conversion"
+
+cd "$NETBSD_SRC"
+exec ./build.sh -m amd64 -j "$JOBS" -O "$NETBSD_OBJ" -T "$NETBSD_TOOLS" \
+    -V "HOST_CFLAGS=$HOST_CFLAGS" "$@"
