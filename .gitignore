@@ -1,0 +1,7 @@
+# Generated build artifacts, disk images, and virtual machine state stay out of Git.
+/build/
+/vm/
+*.img
+*.iso
+*.qcow2
+*.raw
