@@ -10,4 +10,4 @@ export PATH=/usr/pkg/bin:/bin:/sbin:/usr/bin:/usr/sbin
 export LD_LIBRARY_PATH=/usr/pkg/lib
 export TERM=vt100
 cd /
-exec /usr/bin/script -q /dev/null /usr/pkg/bin/sbcl --noinform --no-sysinit --no-userinit
+exec /usr/bin/script -q -c '/usr/pkg/bin/sbcl --noinform --no-sysinit --no-userinit' /dev/null
