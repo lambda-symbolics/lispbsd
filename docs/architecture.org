@@ -17,8 +17,8 @@ The running system has five components with explicit interfaces:
   =runtime= protocol in =src/runtime.lisp= and =src/runtime-sbcl.lisp=.
 - The live Lisp world: =world=, =activity=, =resource=, =event=, =authority=,
   and =generation= objects in the =lispbsd= package.
-- The window system and UI backend, not yet present; the canonical model is
-  a 1-bit logical framebuffer with a native NetBSD path preferred.
+- The window system and UI backend: a canonical 1-bit logical framebuffer
+  in =src/bitmap.lisp=; windows, fonts, and display backends follow.
 - An optional resident agent, not yet present; Autolith may later implement
   the agent protocol through an adapter.
 
@@ -29,6 +29,7 @@ The running system has five components with explicit interfaces:
 | =src/package.lisp= | Single project package =#:lispbsd= |
 | =src/types.lisp= | Shared types and identifiers |
 | =src/conditions.lisp= | Domain conditions |
+| =src/bitmap.lisp= | 1-bit bitmap, bitblt, and drawing primitives |
 | =src/event.lisp= | Structured event log |
 | =src/authority.lisp= | Capability grants |
 | =src/runtime.lisp= | Runtime protocol |

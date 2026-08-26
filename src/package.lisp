@@ -25,6 +25,26 @@
    #:runtime-error
    #:world-error
    #:world-phase-error
+   #:bitmap-error
+   #:invalid-bitmap-size
+   #:unknown-raster-operation
+   ;; Bitmap
+   #:bitmap
+   #:bitmap-ascii
+   #:bitmap-bits
+   #:bitmap-clear
+   #:bitmap-contains-point-p
+   #:bitmap-copy
+   #:bitmap-draw-line
+   #:bitmap-draw-rectangle
+   #:bitmap-fill
+   #:bitmap-height
+   #:bitmap-pixel
+   #:bitmap-row-string
+   #:bitmap-width
+   #:bitblt
+   #:make-bitmap
+   #:raster-operation
    ;; Event
    #:emit-event
    #:event

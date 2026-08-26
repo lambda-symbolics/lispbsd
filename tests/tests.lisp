@@ -185,6 +185,61 @@
     (test-assert (getf (runtime-gc-information runtime) :dynamic-space-size))))
 
 
+(-> test-bitmap () t)
+(defun test-bitmap ()
+  "1-bit drawing, clipping, and raster operations preserve pixels."
+  (let ((bitmap (make-bitmap 8 4)))
+    (test-assert (= 8 (bitmap-width bitmap)))
+    (test-assert (= 4 (bitmap-height bitmap)))
+    (test-assert (equal '("........" "........" "........" "........")
+                        (bitmap-ascii bitmap)))
+    (setf (bitmap-pixel bitmap 1 1) 1)
+    (bitmap-fill bitmap :x 4 :y 0 :width 3 :height 2 :bit 1)
+    (bitmap-draw-line bitmap :x0 0 :y0 3 :x1 7 :y1 3)
+    (test-assert (equal '("....###." ".#..###." "........" "########")
+                        (bitmap-ascii bitmap))))
+  (let ((box (make-bitmap 5 5)))
+    (bitmap-draw-rectangle box :x 0 :y 0 :width 5 :height 5)
+    (test-assert (equal '("#####" "#...#" "#...#" "#...#" "#####")
+                        (bitmap-ascii box))))
+  (let ((source (make-bitmap 3 3 :initial-element 1))
+        (destination (make-bitmap 6 6)))
+    (bitblt source destination :dx 2 :dy 1)
+    (test-assert (equal '("###" "###" "###")
+                        (bitmap-ascii destination :x 2 :y 1 :width 3 :height 3)))
+    (bitblt source destination :dx 2 :dy 1 :operation ':xor)
+    (test-assert (equal '("..." "..." "...")
+                        (bitmap-ascii destination :x 2 :y 1 :width 3 :height 3)))
+    (bitblt source destination :dx -1 :dy -1)
+    (test-assert (= 1 (bitmap-pixel destination 0 0)))
+    (test-assert (= 0 (bitmap-pixel destination 5 5))))
+  (dolist (case '((:src 1 0 1)
+                  (:ior 1 0 1)
+                  (:ior 0 1 1)
+                  (:xor 1 1 0)
+                  (:and 1 1 1)
+                  (:and 1 0 0)
+                  (:not-src 1 0 0)
+                  (:clear 1 1 0)
+                  (:set 0 0 1)
+                  (:not 0 1 0)))
+    (destructuring-bind (operation source destination expected) case
+      (test-assert (= expected (raster-op operation source destination))
+                   (format nil "raster-op ~S ~A ~A" operation source destination))))
+  (handler-case
+      (progn
+        (make-bitmap 0 4)
+        (test-assert nil "make-bitmap should have rejected a zero width"))
+    (invalid-bitmap-size ()
+      (test-assert t)))
+  (handler-case
+      (progn
+        (bitblt (make-bitmap 1 1) (make-bitmap 1 1) :operation ':nope)
+        (test-assert nil "bitblt should have rejected an unknown operation"))
+    (unknown-raster-operation ()
+      (test-assert t))))
+
+
 (-> run-tests () t)
 (defun run-tests ()
   "Run the LispBSD test suite and signal an error on failure."
@@ -199,6 +254,7 @@
   (test-exec)
   (test-inspector-and-definitions)
   (test-runtime-identity)
+  (test-bitmap)
   (if *test-failures*
       (error "~D assertion~:P failed of ~D:~%~{  ~A~%~}"
              (length *test-failures*)

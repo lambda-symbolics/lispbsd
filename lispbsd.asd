@@ -10,6 +10,7 @@
                              (:file "types")
                              (:file "threads")
                              (:file "conditions")
+                             (:file "bitmap")
                              (:file "event")
                              (:file "authority")
                              (:file "runtime")
