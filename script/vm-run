@@ -4,9 +4,12 @@
 #
 # Usage: script/vm-run image [qemu arguments...]
 #
-# Extra arguments are appended verbatim. Set KERNEL to a NetBSD kernel
-# path to load it with Multiboot instead of the image bootloader.
-# KERNEL_APPEND defaults to a serial console and wd0a root.
+# Extra arguments are appended verbatim.
+#
+# KERNEL selects a Multiboot kernel. KERNEL_APPEND defaults to a serial
+# console and wd0a root. MEMORY is the guest RAM in mebibytes. SERIAL,
+# when set, is a QEMU serial backend (for example tcp:127.0.0.1:4555,server,nowait)
+# and the display is switched off so the console can be driven by a client.
 set -eu
 
 IMAGE=${1:?usage: script/vm-run image [qemu arguments...]}
@@ -14,23 +17,22 @@ shift
 
 KERNEL=${KERNEL:-}
 KERNEL_APPEND=${KERNEL_APPEND:-console=com root=wd0a}
+MEMORY=${MEMORY:-1024}
+SERIAL=${SERIAL:-}
+
+if [ -n "$SERIAL" ]; then
+    set -- -display none -serial "$SERIAL" "$@"
+else
+    set -- -nographic "$@"
+fi
 
 if [ -n "$KERNEL" ]; then
-    exec qemu-system-x86_64 \
-        -enable-kvm \
-        -m 1024 \
-        -drive "file=$IMAGE,format=raw" \
-        -nographic \
-        -no-reboot \
-        -kernel "$KERNEL" \
-        -append "$KERNEL_APPEND" \
-        "$@"
+    set -- -kernel "$KERNEL" -append "$KERNEL_APPEND" "$@"
 fi
 
 exec qemu-system-x86_64 \
     -enable-kvm \
-    -m 1024 \
+    -m "$MEMORY" \
     -drive "file=$IMAGE,format=raw" \
-    -nographic \
     -no-reboot \
     "$@"
