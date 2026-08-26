@@ -9,6 +9,10 @@
 (defparameter *guest-prompt* "LISPBSD# "
   "Prompt installed after login so command output can be framed.")
 
+(defparameter *debugger-prompt*
+  (format nil "~%0] ")
+  "SBCL debugger prompt, newline-anchored so kernel timestamps do not match.")
+
 (defparameter *default-kernel*
   "/root/common-lisp/refs/netbsd-obj/sys/arch/amd64/compile/LISPBSD/netbsd"
   "Default Multiboot kernel built by script/netbsd-build.")
@@ -148,35 +152,39 @@
                          :output (merge-pathnames "vm/qemu-guest.log" root)
                          :error-output :output)))
 
+(defun guest-lisp-prompt-p (text)
+  "Return true when TEXT contains a Lisp REPL or debugger prompt."
+  (or (search "* " text) (search *debugger-prompt* text)))
+
 (defun guest-login (stream)
   "Reach a root shell or Lisp listener on STREAM. Return :unix or :lisp."
-  (let ((text (guest-wait-for-any stream '("login:" "* " "pathname of shell") 120)))
+  (let ((text (guest-wait-for-any stream (list "login:" "* " *debugger-prompt* "pathname of shell") 120)))
     (cond
-      ((and (search "* " text)
+      ((and (guest-lisp-prompt-p text)
             (not (search "login:" text))
             (not (search "pathname of shell" text)))
        :lisp)
-        ((search "pathname of shell" text)
-         (guest-send stream "")
-         (let ((after (guest-wait-for-any stream '("# " "$ " "* ") 30)))
-           (if (search "* " after)
-               :lisp
-               (progn
-                 (guest-send stream (format nil "export PS1='~A'" *guest-prompt*))
-                 (guest-wait-for stream *guest-prompt* 15)
-                 :unix))))
-        (t
-         (guest-send stream "root")
-         (let ((after (guest-wait-for-any stream '("Password:" "# " "$ " "* ") 30)))
-           (when (search "Password:" after)
-             (guest-send stream "")
-             (setf after (guest-wait-for-any stream '("# " "$ " "* ") 30)))
-           (cond
-             ((search "* " after)
-              :lisp)
-             (t
-              (guest-send stream (format nil "export PS1='~A'" *guest-prompt*))
-              (guest-wait-for stream *guest-prompt* 15)
+      ((search "pathname of shell" text)
+       (guest-send stream "")
+       (let ((after (guest-wait-for-any stream (list "# " "$ " "* " *debugger-prompt*) 30)))
+         (if (guest-lisp-prompt-p after)
+             :lisp
+             (progn
+               (guest-send stream (format nil "export PS1='~A'" *guest-prompt*))
+               (guest-wait-for stream *guest-prompt* 15)
+               :unix))))
+      (t
+       (guest-send stream "root")
+       (let ((after (guest-wait-for-any stream (list "Password:" "# " "$ " "* " *debugger-prompt*) 30)))
+         (when (search "Password:" after)
+           (guest-send stream "")
+           (setf after (guest-wait-for-any stream (list "# " "$ " "* " *debugger-prompt*) 30)))
+         (cond
+           ((guest-lisp-prompt-p after)
+            :lisp)
+           (t
+            (guest-send stream (format nil "export PS1='~A'" *guest-prompt*))
+            (guest-wait-for stream *guest-prompt* 15)
               :unix)))))))
 
 (defun guest-run-command (stream command &key (timeout 300) (console :unix))
@@ -184,10 +192,11 @@
   (if (eq console :lisp)
       (progn
         (guest-send stream command)
-        (let* ((text (guest-wait-for stream "* " timeout))
+        (let* ((text (guest-wait-for-any stream (list "* " *debugger-prompt*) timeout))
                (echo-end (let ((cr (position #\Return text)))
                            (if cr (1+ cr) 0)))
-               (prompt-start (search "* " text :from-end t)))
+               (prompt-start (or (search "* " text :from-end t)
+                                 (search *debugger-prompt* text :from-end t))))
           (string-trim '(#\Space #\Tab #\Return #\Newline)
                        (subseq text echo-end (or prompt-start (length text))))))
       (progn
