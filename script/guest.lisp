@@ -162,15 +162,19 @@
        (guest-send stream (format nil "export PS1='~A'" *guest-prompt*))
        (guest-wait-for stream *guest-prompt* 15)
        :unix)
-      (t
-       (guest-send stream "root")
-       (let ((after (guest-wait-for-any stream '("Password:" "# " "$ ") 30)))
-         (when (search "Password:" after)
-           (guest-send stream "")
-           (guest-wait-for-any stream '("# " "$ ") 30)))
-       (guest-send stream (format nil "export PS1='~A'" *guest-prompt*))
-       (guest-wait-for stream *guest-prompt* 15)
-       :unix))))
+        (t
+         (guest-send stream "root")
+         (let ((after (guest-wait-for-any stream '("Password:" "# " "$ " "* ") 30)))
+           (when (search "Password:" after)
+             (guest-send stream "")
+             (setf after (guest-wait-for-any stream '("# " "$ " "* ") 30)))
+           (cond
+             ((search "* " after)
+              :lisp)
+             (t
+              (guest-send stream (format nil "export PS1='~A'" *guest-prompt*))
+              (guest-wait-for stream *guest-prompt* 15)
+              :unix)))))))
 
 (defun guest-run-command (stream command &key (timeout 300) (console :unix))
   "Run COMMAND at the guest prompt and return framed output."
