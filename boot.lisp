@@ -3,13 +3,11 @@
 (require "asdf")
 
 (let* ((root (make-pathname :name nil :type nil :defaults *load-truename*))
-       (asd (merge-pathnames "lispbsd.asd" root))
-       (fasl (merge-pathnames "fasl/" root)))
-  (ensure-directories-exist fasl)
+       (asd (merge-pathnames "lispbsd.asd" root)))
+  (setf (uiop:getenv "HOME") (namestring root))
   (asdf:initialize-source-registry
    `(:source-registry (:directory ,root) :ignore-inherited-configuration))
-  (asdf:initialize-output-translations
-   `(:output-translations (t ,fasl) :ignore-inherited-configuration))
+  (asdf:disable-output-translations)
   (asdf:load-asd asd)
   (asdf:load-system :lispbsd))
 
