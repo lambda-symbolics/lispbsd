@@ -42,11 +42,13 @@ The running system has five components with explicit interfaces:
 | =src/inspector.lisp= | Generic inspector |
 | =src/exec.lisp= | Lisp Exec |
 | =tests/tests.lisp= | Hosted behavioral tests |
+| =boot.lisp= | Native console loader; loads the world from source |
 | =script/netbsd-build= | Cross-build NetBSD/amd64 |
 | =script/vm-run= | Boot a disk image under QEMU |
 | =script/guest= | Serial console driver for the QEMU guest |
 | =netbsd/conf/LISPBSD= | Multiboot kernel config copied into the NetBSD tree at build time |
 | =netbsd/console/lispbsd-console= | Intended getty replacement; SBCL on a pty |
+| =netbsd/console/profile= | Root profile that execs SBCL and loads the world |
 
 * Hosted prototype
 
@@ -58,6 +60,7 @@ root authority.  It does not boot NetBSD and does not start a display.
 
 The development disk is a NetBSD 10.1 live image booted with the LISPBSD
 kernel.  pkgsrc SBCL 2.6.5 is installed on that disk.  Root login on
-=constty= execs SBCL from =/.profile=, so the serial console is a Lisp
-listener sitting on the NetBSD kernel and drivers.  Raw =/dev/constty=
-rejects SBCL writes with EOPNOTSUPP; getty sets up the line first.
+=constty= execs SBCL, which loads =/lispbsd/boot.lisp= and starts an
+operational world.  =script/guest '(lispbsd:world-phase lispbsd:*world*)'
+returns =:OPERATIONAL=.  Unix daemons still exist on the live image; they
+are not the user-visible operating environment.
