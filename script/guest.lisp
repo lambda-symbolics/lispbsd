@@ -149,30 +149,47 @@
                          :error-output :output)))
 
 (defun guest-login (stream)
-  "Reach a root shell on STREAM and install *GUEST-PROMPT*."
-  (guest-wait-for stream "login:" 120)
-  (guest-send stream "root")
-  (let ((text (guest-wait-for-any stream '("Password:" "# " "$ ") 30)))
-    (when (search "Password:" text)
-      (guest-send stream "")
-      (guest-wait-for-any stream '("# " "$ ") 30)))
-  (guest-send stream (format nil "export PS1='~A'" *guest-prompt*))
-  (guest-wait-for stream *guest-prompt* 15)
-  t)
+  "Reach a root shell or Lisp listener on STREAM. Return :unix or :lisp."
+  (let ((text (guest-wait-for-any stream '("login:" "* ") 120)))
+    (cond
+      ((and (search "* " text) (not (search "login:" text)))
+       :lisp)
+      (t
+       (guest-send stream "root")
+       (let ((after (guest-wait-for-any stream '("Password:" "# " "$ ") 30)))
+         (when (search "Password:" after)
+           (guest-send stream "")
+           (guest-wait-for-any stream '("# " "$ ") 30)))
+       (guest-send stream (format nil "export PS1='~A'" *guest-prompt*))
+       (guest-wait-for stream *guest-prompt* 15)
+       :unix))))
 
-(defun guest-run-command (stream command &key (timeout 300))
-  "Run COMMAND at the guest prompt and return the output after the echo."
-  (guest-send stream command)
-  (let* ((text (guest-wait-for stream *guest-prompt* timeout))
-         (echo-end (let ((cr (position #\Return text)))
-                     (if cr (1+ cr) 0)))
-         (prompt-start (search *guest-prompt* text :from-end t)))
-    (string-trim '(#\Space #\Tab #\Return #\Newline)
-                 (subseq text echo-end (or prompt-start (length text))))))
+(defun guest-run-command (stream command &key (timeout 300) (console :unix))
+  "Run COMMAND at the guest prompt and return framed output."
+  (if (eq console :lisp)
+      (progn
+        (guest-send stream command)
+        (let* ((text (guest-wait-for stream "* " timeout))
+               (echo-end (let ((cr (position #\Return text)))
+                           (if cr (1+ cr) 0)))
+               (prompt-start (search "* " text :from-end t)))
+          (string-trim '(#\Space #\Tab #\Return #\Newline)
+                       (subseq text echo-end (or prompt-start (length text))))))
+      (progn
+        (guest-send stream command)
+        (let* ((text (guest-wait-for stream *guest-prompt* timeout))
+               (echo-end (let ((cr (position #\Return text)))
+                           (if cr (1+ cr) 0)))
+               (prompt-start (search *guest-prompt* text :from-end t)))
+          (string-trim '(#\Space #\Tab #\Return #\Newline)
+                       (subseq text echo-end (or prompt-start (length text))))))))
 
-(defun guest-shutdown (stream process)
+(defun guest-shutdown (stream process &key (console :unix))
   "Halt the guest and wait for QEMU to exit."
-  (ignore-errors (guest-send stream "shutdown -p now"))
+  (ignore-errors
+    (if (eq console :lisp)
+        (guest-send stream "(sb-ext:quit)")
+        (guest-send stream "shutdown -p now")))
   (let ((deadline (+ (get-internal-real-time)
                      (* 30 internal-time-units-per-second))))
     (loop until (not (uiop:process-alive-p process))
@@ -203,11 +220,13 @@
          (progn
            (setf process (guest-start-qemu image kernel memory host port))
            (setf stream (guest-open-serial host port))
-           (guest-login stream)
-           (let ((output (guest-run-command stream command :timeout 600)))
+           (let* ((console (guest-login stream))
+                  (output (guest-run-command stream command
+                                             :timeout 600
+                                             :console console)))
              (write-string output)
              (terpri)
-             (guest-shutdown stream process)
+             (guest-shutdown stream process :console console)
              (setf process nil)
              output))
       (when stream
