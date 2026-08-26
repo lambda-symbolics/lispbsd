@@ -1,11 +1,13 @@
 #!/bin/sh
 # Serial console listener: SBCL is the user-visible operating environment.
 # init(8) respawns this in place of getty on constty.
-export HOME=/root
+#
+# SBCL cannot use /dev/constty as a raw fd-stream (writes return
+# EOPNOTSUPP), so sit behind a pty provided by script(1).
+export HOME=/
 export USER=root
 export PATH=/usr/pkg/bin:/bin:/sbin:/usr/bin:/usr/sbin
 export LD_LIBRARY_PATH=/usr/pkg/lib
 export TERM=vt100
-cd /root || cd /
-exec /usr/pkg/bin/sbcl --noinform --no-sysinit --no-userinit --disable-debugger \
-    2>>/var/log/lispbsd-console.log
+cd /
+exec /usr/bin/script -q /dev/null /usr/pkg/bin/sbcl --noinform --no-sysinit --no-userinit
