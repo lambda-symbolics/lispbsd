@@ -44,6 +44,7 @@ The running system has five components with explicit interfaces:
 | =tests/tests.lisp= | Hosted behavioral tests |
 | =script/netbsd-build= | Cross-build NetBSD/amd64 |
 | =script/vm-run= | Boot a disk image under QEMU |
+| =netbsd/conf/LISPBSD= | Multiboot kernel config copied into the NetBSD tree at build time |
 
 * Hosted prototype
 
