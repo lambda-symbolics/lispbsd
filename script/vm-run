@@ -10,6 +10,7 @@
 # console and wd0a root. MEMORY is the guest RAM in mebibytes. SERIAL,
 # when set, is a QEMU serial backend (for example tcp:127.0.0.1:4555,server,nowait)
 # and the display is switched off so the console can be driven by a client.
+# VIRTFS is a host directory exported as virtio-9p; VIRTFS_TAG is the mount tag.
 set -eu
 
 IMAGE=${1:?usage: script/vm-run image [qemu arguments...]}
@@ -19,6 +20,8 @@ KERNEL=${KERNEL:-}
 KERNEL_APPEND=${KERNEL_APPEND:-console=com root=wd0a}
 MEMORY=${MEMORY:-1024}
 SERIAL=${SERIAL:-}
+VIRTFS=${VIRTFS:-}
+VIRTFS_TAG=${VIRTFS_TAG:-host}
 
 if [ -n "$SERIAL" ]; then
     set -- -display none -serial "$SERIAL" "$@"
@@ -28,6 +31,12 @@ fi
 
 if [ -n "$KERNEL" ]; then
     set -- -kernel "$KERNEL" -append "$KERNEL_APPEND" "$@"
+fi
+
+if [ -n "$VIRTFS" ]; then
+    set -- -fsdev "local,id=lispbsd9p,path=$VIRTFS,security_model=none" \
+           -device virtio-9p-pci,fsdev=lispbsd9p,mount_tag="$VIRTFS_TAG" \
+           "$@"
 fi
 
 exec qemu-system-x86_64 \
