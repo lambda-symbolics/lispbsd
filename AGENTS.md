@@ -277,6 +277,25 @@ or vendored dependencies in the build documentation when introduced.
 - Operating-system changes are verified by building the affected NetBSD
   artifact and booting it under QEMU before the change is called done.
 
+Run the hosted Lisp test suite from a REPL that can see this repository:
+
+```lisp
+(asdf:load-asd (merge-pathnames "lispbsd.asd" (uiop:getcwd)))
+(asdf:test-system :lispbsd)
+```
+
+Cross-build the NetBSD/amd64 tools and GENERIC kernel:
+
+```sh
+script/netbsd-build tools kernel=GENERIC
+```
+
+Boot a raw disk image under QEMU with the serial console on stdin/stdout:
+
+```sh
+script/vm-run path/to/disk.img
+```
+
 For a fast delimiter check before loading edited Lisp, use the built-in
 `lisp.paren-check` operation on each relevant source tree:
 
