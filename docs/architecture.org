@@ -44,10 +44,20 @@ The running system has five components with explicit interfaces:
 | =tests/tests.lisp= | Hosted behavioral tests |
 | =script/netbsd-build= | Cross-build NetBSD/amd64 |
 | =script/vm-run= | Boot a disk image under QEMU |
+| =script/guest= | Serial console driver for the QEMU guest |
 | =netbsd/conf/LISPBSD= | Multiboot kernel config copied into the NetBSD tree at build time |
+| =netbsd/console/lispbsd-console= | Intended getty replacement; SBCL on a pty |
 
 * Hosted prototype
 
 Phase 0 runs inside an ordinary SBCL process.  =make-hosted-world= constructs
 an operational world, probes host machine resources, and grants the world
 root authority.  It does not boot NetBSD and does not start a display.
+
+* Native boot so far
+
+The development disk is a NetBSD 10.1 live image booted with the LISPBSD
+kernel.  pkgsrc SBCL 2.6.5 is installed on that disk.  Root login on
+=constty= execs SBCL from =/.profile=, so the serial console is a Lisp
+listener sitting on the NetBSD kernel and drivers.  Raw =/dev/constty=
+rejects SBCL writes with EOPNOTSUPP; getty sets up the line first.
