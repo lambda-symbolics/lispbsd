@@ -315,12 +315,22 @@ Drive a command or Lisp form over the guest serial console:
 ```sh
 script/guest uname -a
 script/guest '(lisp-implementation-version)'
+script/guest --send netbsd/console/install.lisp
 ```
 
 `script/guest` logs in as root. After login the root profile execs SBCL,
 so a form is evaluated in the live listener. Attach a FAT image of pkgsrc
 packages with `PKG_DISK=path/to/fat.img` when installing software into the
 guest.
+
+Export a host directory into the guest over virtio-9p:
+
+```sh
+VIRTFS=/root VIRTFS_TAG=host MEMORY=4096 script/guest '(lispbsd:world-phase lispbsd:*world*)'
+```
+
+The guest kernel exposes that export as `vio9p0`. Create `/dev/vio9p0` with
+`mknod /dev/vio9p0 c 356 0` and mount it with `mount_9p -cu /dev/vio9p0 /host`.
 
 For a fast delimiter check before loading edited Lisp, use the built-in
 `lisp.paren-check` operation on each relevant source tree:
