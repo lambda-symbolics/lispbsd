@@ -1,0 +1,8 @@
+#!/bin/sh
+# Run a command in the LispBSD QEMU guest over the serial console.
+#
+# Usage: script/guest command...
+#        script/guest -c 'shell snippet'
+set -eu
+ROOT=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
+exec sbcl --script "$ROOT/script/guest.lisp" "$@"
