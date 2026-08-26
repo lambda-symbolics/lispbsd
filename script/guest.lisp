@@ -156,12 +156,15 @@
             (not (search "login:" text))
             (not (search "pathname of shell" text)))
        :lisp)
-      ((search "pathname of shell" text)
-       (guest-send stream "")
-       (guest-wait-for-any stream '("# " "$ ") 30)
-       (guest-send stream (format nil "export PS1='~A'" *guest-prompt*))
-       (guest-wait-for stream *guest-prompt* 15)
-       :unix)
+        ((search "pathname of shell" text)
+         (guest-send stream "")
+         (let ((after (guest-wait-for-any stream '("# " "$ " "* ") 30)))
+           (if (search "* " after)
+               :lisp
+               (progn
+                 (guest-send stream (format nil "export PS1='~A'" *guest-prompt*))
+                 (guest-wait-for stream *guest-prompt* 15)
+                 :unix))))
         (t
          (guest-send stream "root")
          (let ((after (guest-wait-for-any stream '("Password:" "# " "$ " "* ") 30)))
