@@ -1,0 +1,52 @@
+#+TITLE: LispBSD Architecture Map
+#+LANGUAGE: en
+#+OPTIONS: toc:2 num:t ^:nil
+
+* Sources of truth
+
+=lisp-machine-spec.org= is the normative design.  =AGENTS.md= is repository
+policy.  Tracked source plus the =lispbsd= test suite are executable truth.
+
+* Runtime boundaries
+
+The running system has five components with explicit interfaces:
+
+- NetBSD kernel and drivers, built from the reference source tree with
+  =script/netbsd-build= and exercised under QEMU with =script/vm-run=.
+- SBCL as the Common Lisp runtime substrate, reached only through the
+  =runtime= protocol in =src/runtime.lisp= and =src/runtime-sbcl.lisp=.
+- The live Lisp world: =world=, =activity=, =resource=, =event=, =authority=,
+  and =generation= objects in the =lispbsd= package.
+- The window system and UI backend, not yet present; the canonical model is
+  a 1-bit logical framebuffer with a native NetBSD path preferred.
+- An optional resident agent, not yet present; Autolith may later implement
+  the agent protocol through an adapter.
+
+* Source layout
+
+| Path | Responsibility |
+|------+----------------|
+| =src/package.lisp= | Single project package =#:lispbsd= |
+| =src/types.lisp= | Shared types and identifiers |
+| =src/conditions.lisp= | Domain conditions |
+| =src/event.lisp= | Structured event log |
+| =src/authority.lisp= | Capability grants |
+| =src/runtime.lisp= | Runtime protocol |
+| =src/runtime-sbcl.lisp= | SBCL adapter |
+| =src/resource.lisp= | Resource objects |
+| =src/machine.lisp= | Hosted machine inventory |
+| =src/activity.lisp= | Schedulable computations |
+| =src/generation.lisp= | Generation metadata |
+| =src/world.lisp= | Live world and startup phases |
+| =src/definition.lisp= | Definition browser |
+| =src/inspector.lisp= | Generic inspector |
+| =src/exec.lisp= | Lisp Exec |
+| =tests/tests.lisp= | Hosted behavioral tests |
+| =script/netbsd-build= | Cross-build NetBSD/amd64 |
+| =script/vm-run= | Boot a disk image under QEMU |
+
+* Hosted prototype
+
+Phase 0 runs inside an ordinary SBCL process.  =make-hosted-world= constructs
+an operational world, probes host machine resources, and grants the world
+root authority.  It does not boot NetBSD and does not start a display.
