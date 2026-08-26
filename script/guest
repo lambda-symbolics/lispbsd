@@ -5,4 +5,5 @@
 #        script/guest -c 'shell snippet'
 set -eu
 ROOT=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
+export CL_SOURCE_REGISTRY='(:source-registry :ignore-inherited-configuration)'
 exec sbcl --script "$ROOT/script/guest.lisp" "$@"

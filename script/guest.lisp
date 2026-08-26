@@ -21,17 +21,23 @@
              (write-string (guest-error-message condition) stream))))
 
 (defun guest-argv ()
-  "Return user arguments after the script name."
-  (rest sb-ext:*posix-argv*))
+  "Return user arguments after sbcl --script guest.lisp."
+  (let ((args sb-ext:*posix-argv*))
+    (when (and args (search "sbcl" (first args)))
+      (setf args (rest args)))
+    (when (and args (string= (first args) "--script"))
+      (setf args (rest args)))
+    (when (and args (search "guest.lisp" (first args)))
+      (setf args (rest args)))
+    args))
 
 (defun guest-repository-root ()
   "Return the LispBSD repository root containing this script."
-  (let* ((script (first sb-ext:*posix-argv*))
-         (script-path (probe-file script)))
-    (unless script-path
+  (let ((script (or *load-truename* *load-pathname*)))
+    (unless script
       (error 'guest-error :message "cannot locate guest.lisp"))
     (truename (merge-pathnames "../" (make-pathname :name nil :type nil
-                                                    :defaults script-path)))))
+                                                    :defaults script)))))
 
 (defun guest-getenv (name &optional default)
   "Return environment variable NAME, or DEFAULT when unset or empty."
