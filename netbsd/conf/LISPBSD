@@ -15,3 +15,5 @@ options 	MULTIBOOT
 
 # Host-exported filesystems for development (Autolith, lispbsd source).
 vio9p*	at virtio?
+file-system	PUFFS
+pseudo-device	putter
