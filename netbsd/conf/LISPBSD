@@ -1,13 +1,14 @@
 # LispBSD amd64 kernel.
 #
-# Built from GENERIC with a forced serial console so QEMU -nographic
-# boots to a usable login, and with Multiboot so QEMU -kernel can load
-# this image without the stock bootloader.
+# GENERIC plus Multiboot, so QEMU -kernel can load this image without
+# the stock bootloader. Serial console is selected at boot with
+# console=com on the Multiboot command line.
+#
+# CONSDEVNAME/CONS_OVERRIDE are omitted: they break xen pvh_consinit.c
+# in GENERIC.
 
 include 	"arch/amd64/conf/GENERIC"
 
 ident 		LISPBSD
 
 options 	MULTIBOOT
-options 	CONSDEVNAME="\"com\"",CONADDR=0x3f8,CONSPEED=115200
-options 	CONS_OVERRIDE
