@@ -1,0 +1,4 @@
+#!/bin/sh
+# Serial console listener: SBCL is the user-visible operating environment.
+# init(8) respawns this in place of getty on constty.
+exec /usr/pkg/bin/sbcl --noinform --no-sysinit --no-userinit
