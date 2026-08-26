@@ -2,14 +2,11 @@
 
 (require "asdf")
 
-(let* ((root (make-pathname :name nil :type nil :defaults *load-truename*))
-       (asd (merge-pathnames "lispbsd.asd" root)))
-  (setf (uiop:getenv "HOME") (namestring root))
-  (asdf:initialize-source-registry
-   `(:source-registry (:directory ,root) :ignore-inherited-configuration))
-  (asdf:disable-output-translations)
-  (asdf:load-asd asd)
-  (asdf:load-system :lispbsd))
+(let ((root (make-pathname :name nil :type nil :defaults *load-truename*)))
+  (dolist (name '("package" "types" "threads" "conditions" "event" "authority"
+                  "runtime" "runtime-sbcl" "resource" "machine" "activity"
+                  "generation" "world" "definition" "inspector" "exec"))
+    (load (merge-pathnames (format nil "src/~A.lisp" name) root))))
 
 (in-package #:lispbsd)
 
