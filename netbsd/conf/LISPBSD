@@ -14,6 +14,5 @@ ident 		LISPBSD
 options 	MULTIBOOT
 
 # Host-exported filesystems for development (Autolith, lispbsd source).
+# PUFFS/putter already come from GENERIC's filesystems.config.
 vio9p*	at virtio?
-file-system	PUFFS
-pseudo-device	putter
