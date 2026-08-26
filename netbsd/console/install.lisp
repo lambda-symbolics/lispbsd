@@ -1,0 +1,20 @@
+(progn
+  (sb-ext:run-program "/sbin/mount" '("-uw" "/") :wait t)
+  (let ((env '("PATH=/bin:/sbin:/usr/bin:/usr/sbin"))
+        (log (make-string-output-stream)))
+    (sb-ext:run-program "/bin/mkdir" '("-p" "/lispbsd" "/mnt/autolith")
+                        :wait t :environment env)
+    (sb-ext:run-program "/bin/tar" '("xf" "/dev/wd1d" "-C" "/lispbsd")
+                        :wait t :output log :error log :environment env)
+    (with-open-file (out "/.profile" :direction :output :if-exists :supersede)
+      (write-line "exec /usr/pkg/bin/sbcl --noinform --no-sysinit --no-userinit --load /lispbsd/boot.lisp --eval '(in-package #:lispbsd)'" out)
+      (finish-output out))
+    (dolist (svc '("sshd" "postfix" "inetd" "cron"))
+      (sb-ext:run-program "/bin/sh"
+                          (list "-c" (format nil "if grep -q '^~A=' /etc/rc.conf; then sed -e 's/^~A=.*/~A=NO/' /etc/rc.conf > /tmp/rc.conf && mv /tmp/rc.conf /etc/rc.conf; else echo '~A=NO' >> /etc/rc.conf; fi" svc svc svc svc))
+                          :wait t :environment env :output log :error log))
+    (sb-ext:run-program "/bin/sh" '("MAKEDEV" "vio9p0")
+                        :wait t :directory #p"/dev/" :environment env
+                        :output log :error log)
+    (sb-ext:run-program "/bin/sync" nil :wait t)
+    (get-output-stream-string log)))

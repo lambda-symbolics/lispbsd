@@ -1,0 +1,9 @@
+#!/bin/sh
+# Install LispBSD sources and console profile into the guest disk.
+set -eu
+ROOT=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
+export CL_SOURCE_REGISTRY='(:source-registry :ignore-inherited-configuration)'
+tar -C "$ROOT" -cf "$ROOT/vm/lispbsd.tar" lispbsd.asd boot.lisp src
+export PKG_DISK="$ROOT/vm/lispbsd.tar"
+export KERNEL_APPEND="${KERNEL_APPEND:-console=com root=wd0a -s}"
+exec "$ROOT/script/guest" --send "$ROOT/netbsd/console/install.lisp"

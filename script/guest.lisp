@@ -51,7 +51,7 @@
         default)))
 
 (defun guest-parse-arguments (arguments)
-  "Parse ARGUMENTS into a guest shell command string."
+  "Parse ARGUMENTS into a guest command string."
   (cond
     ((null arguments)
      (let ((text (string-trim '(#\Space #\Tab #\Newline)
@@ -63,6 +63,11 @@
      (unless (rest arguments)
        (error 'guest-error :message "usage: script/guest -c command"))
      (format nil "~{~A~^ ~}" (rest arguments)))
+    ((string= (first arguments) "--send")
+     (let ((path (second arguments)))
+       (unless (and path (probe-file path))
+         (error 'guest-error :message "usage: script/guest --send file"))
+       (uiop:read-file-string path)))
     (t
      (format nil "~{~A~^ ~}" arguments))))
 
