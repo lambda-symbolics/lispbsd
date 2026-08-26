@@ -309,6 +309,18 @@ KERNEL=/root/common-lisp/refs/netbsd-obj/sys/arch/amd64/compile/LISPBSD/netbsd \
   script/vm-run path/to/disk.img
 ```
 
+Drive a command or Lisp form over the guest serial console:
+
+```sh
+script/guest uname -a
+script/guest '(lisp-implementation-version)'
+```
+
+`script/guest` logs in as root. After login the root profile execs SBCL,
+so a form is evaluated in the live listener. Attach a FAT image of pkgsrc
+packages with `PKG_DISK=path/to/fat.img` when installing software into the
+guest.
+
 For a fast delimiter check before loading edited Lisp, use the built-in
 `lisp.paren-check` operation on each relevant source tree:
 
