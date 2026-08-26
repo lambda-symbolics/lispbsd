@@ -150,10 +150,18 @@
 
 (defun guest-login (stream)
   "Reach a root shell or Lisp listener on STREAM. Return :unix or :lisp."
-  (let ((text (guest-wait-for-any stream '("login:" "* ") 120)))
+  (let ((text (guest-wait-for-any stream '("login:" "* " "pathname of shell") 120)))
     (cond
-      ((and (search "* " text) (not (search "login:" text)))
+      ((and (search "* " text)
+            (not (search "login:" text))
+            (not (search "pathname of shell" text)))
        :lisp)
+      ((search "pathname of shell" text)
+       (guest-send stream "")
+       (guest-wait-for-any stream '("# " "$ ") 30)
+       (guest-send stream (format nil "export PS1='~A'" *guest-prompt*))
+       (guest-wait-for stream *guest-prompt* 15)
+       :unix)
       (t
        (guest-send stream "root")
        (let ((after (guest-wait-for-any stream '("Password:" "# " "$ ") 30)))
