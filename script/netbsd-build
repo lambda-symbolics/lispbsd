@@ -12,11 +12,10 @@ NETBSD_OBJ=${NETBSD_OBJ:-/root/common-lisp/refs/netbsd-obj}
 NETBSD_TOOLS=${NETBSD_TOOLS:-/root/common-lisp/refs/netbsd-tools}
 JOBS=${JOBS:-$(nproc)}
 
-# The netbsd-10 branch predates host compilers that treat empty
-# parameter lists as (void) and reject old-style incompatible pointer
-# declarations as hard errors. Compile host tools as GNU89 and relax
-# exactly those diagnostics.
-HOST_CFLAGS="-std=gnu89 -O -fcommon -Wno-error=incompatible-pointer-types -Wno-error=int-conversion"
+# GCC 14 defaults to C23, where empty parameter lists mean (void) and
+# old-style incompatible pointers are errors. NetBSD 10 host tools mix
+# pre-C99 declarations with C99 constructs, so compile them as GNU11.
+HOST_CFLAGS="-std=gnu11 -O -fcommon -Wno-error=incompatible-pointer-types -Wno-error=int-conversion"
 
 cd "$NETBSD_SRC"
 exec ./build.sh -m amd64 -j "$JOBS" -O "$NETBSD_OBJ" -T "$NETBSD_TOOLS" \
