@@ -4,13 +4,11 @@
   :license "ISC"
   :version "0.0.1"
   :serial t
-  :depends-on (#:bordeaux-threads
-               #:closer-mop
-               #:serapeum)
   :components ((:module "src"
                 :serial t
                 :components ((:file "package")
                              (:file "types")
+                             (:file "threads")
                              (:file "conditions")
                              (:file "event")
                              (:file "authority")

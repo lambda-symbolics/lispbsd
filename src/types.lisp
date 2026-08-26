@@ -2,6 +2,11 @@
 
 ;;;; -- Fundamental Types --
 
+(defmacro -> (name argument-types return-type)
+  "Declare NAME's function type. Compatible with Serapeum's -> notation."
+    `(declaim (ftype (function ,argument-types ,return-type) ,name)))
+
+
 (deftype option (inner-type)
   "A value that is either NIL or an instance of INNER-TYPE."
   `(or null ,inner-type))

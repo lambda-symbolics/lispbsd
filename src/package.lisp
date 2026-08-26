@@ -1,27 +1,20 @@
 (defpackage #:lispbsd
   (:use #:cl)
-  (:import-from #:serapeum
-                #:->)
-  (:import-from #:bordeaux-threads
-                #:condition-notify
-                #:condition-wait
-                #:current-thread
-                #:interrupt-thread
-                #:join-thread
-                #:make-condition-variable
-                #:make-lock
-                #:make-thread
-                #:thread-alive-p
-                #:with-lock-held)
-  (:import-from #:closer-mop
+  (:import-from #:sb-mop
                 #:class-slots
                 #:slot-definition-name)
+  (:import-from #:sb-thread
+                #:interrupt-thread
+                #:join-thread
+                #:make-thread
+                #:thread-alive-p)
   (:export
-   ;; Types
-   #:non-empty-string
-   #:object-id
-   #:option
-   #:timestamp
+     ;; Types
+     #:->
+     #:non-empty-string
+     #:object-id
+     #:option
+     #:timestamp
    ;; Conditions
    #:activity-error
    #:activity-failed
