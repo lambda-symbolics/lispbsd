@@ -181,7 +181,8 @@ of repeating type or state dispatch in `cond` trees.
 
 ### Types and Documentation
 
-- Declare function types with Serapeum's imported `->` notation:
+- Declare function types with the project's `->` notation, compatible with
+  Serapeum's:
 
   ```lisp
   (-> generation-find (string) (option generation))
