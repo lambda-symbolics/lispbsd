@@ -1,0 +1,13 @@
+# LispBSD amd64 kernel.
+#
+# Built from GENERIC with a forced serial console so QEMU -nographic
+# boots to a usable login, and with Multiboot so QEMU -kernel can load
+# this image without the stock bootloader.
+
+include 	"arch/amd64/conf/GENERIC"
+
+ident 		LISPBSD
+
+options 	MULTIBOOT
+options 	CONSDEVNAME="\"com\"",CONADDR=0x3f8,CONSPEED=115200
+options 	CONS_OVERRIDE
