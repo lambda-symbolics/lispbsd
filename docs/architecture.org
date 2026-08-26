@@ -64,3 +64,9 @@ kernel.  pkgsrc SBCL 2.6.5 is installed on that disk.  Root login on
 operational world.  =script/guest '(lispbsd:world-phase lispbsd:*world*)'
 returns =:OPERATIONAL=.  Unix daemons still exist on the live image; they
 are not the user-visible operating environment.
+
+The LISPBSD kernel includes =vio9p=.  QEMU can export a host directory with
+=VIRTFS=; the guest creates =/dev/vio9p0= (char 356) and mounts it with
+=mount_9p -cu=.  Autolith source is reachable that way.  Compiling Autolith
+inside the guest is still unfinished: its Quicklisp and sibling checkouts
+are large, and the first load over 9p is slow.
