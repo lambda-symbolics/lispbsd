@@ -290,10 +290,23 @@ Cross-build the NetBSD/amd64 tools and GENERIC kernel:
 script/netbsd-build tools kernel=GENERIC
 ```
 
+Build the LispBSD serial/Multiboot kernel:
+
+```sh
+script/netbsd-build kernel=LISPBSD
+```
+
 Boot a raw disk image under QEMU with the serial console on stdin/stdout:
 
 ```sh
 script/vm-run path/to/disk.img
+```
+
+Boot that image with the self-built LISPBSD kernel:
+
+```sh
+KERNEL=/root/common-lisp/refs/netbsd-obj/sys/arch/amd64/compile/LISPBSD/netbsd \
+  script/vm-run path/to/disk.img
 ```
 
 For a fast delimiter check before loading edited Lisp, use the built-in
