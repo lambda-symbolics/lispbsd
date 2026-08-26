@@ -130,14 +130,20 @@
   "Start QEMU for IMAGE and return the process."
   (let* ((root (guest-repository-root))
          (vm-run (merge-pathnames "script/vm-run" root))
+         (pkg-disk (guest-getenv "PKG_DISK"))
          (environment (append (list (format nil "MEMORY=~A" memory)
                                     (format nil "SERIAL=tcp:~A:~A,server,nowait"
                                             host port))
                               (when (and kernel (probe-file kernel))
                                 (list (format nil "KERNEL=~A"
                                               (namestring (truename kernel)))))
-                              (sb-ext:posix-environ))))
-    (uiop:launch-program (list (namestring vm-run) (namestring image))
+                              (sb-ext:posix-environ)))
+         (command (append (list (namestring vm-run) (namestring image))
+                          (when (and pkg-disk (probe-file pkg-disk))
+                            (list "-drive"
+                                  (format nil "file=~A,format=raw,index=1"
+                                          (namestring (truename pkg-disk))))))))
+    (uiop:launch-program command
                          :environment environment
                          :output (merge-pathnames "vm/qemu-guest.log" root)
                          :error-output :output)))
