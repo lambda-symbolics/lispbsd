@@ -39,6 +39,7 @@
                              (:file "resource")
                              (:file "machine")
                              (:file "network")
+                             (:file "storage")
                              (:file "activity")
                              (:file "supervisor")
                              (:file "generation")

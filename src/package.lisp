@@ -305,6 +305,14 @@
    #:network-substrate-set-interface-state
    #:probe-netbsd-network-interfaces
    #:probe-network-substrate
+   ;; Storage
+   #:probe-storage-volumes
+   #:storage-volume
+   #:storage-volume-device
+   #:storage-volume-filesystem
+   #:storage-volume-free-bytes
+   #:storage-volume-mount-point
+   #:storage-volume-total-bytes
    #:resource
    #:resource-id
    #:resource-kind

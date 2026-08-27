@@ -103,6 +103,49 @@
       (ignore-errors (delete-file path)))))
 
 
+(-> test-storage () t)
+(defun test-storage ()
+  "Storage probing parses mounts and df output into volume data."
+  (dolist (case '(("/dev/sda1 / ext4 rw,relatime 0 0"
+                   ("/dev/sda1" "/" "ext4"))
+                  ("proc /proc proc rw 0 0"
+                   nil)
+                  ("tmpfs /tmp tmpfs rw 0 0"
+                   nil)))
+    (destructuring-bind (line expected) case
+      (test-assert (equal expected (storage--parse-proc-mounts-line line))
+                   (format nil "proc mounts parse ~S" line))))
+  (dolist (case '(("/dev/wd0a on / type ffs (local)"
+                   ("/dev/wd0a" "/" "ffs"))
+                  ("/dev/vio9p0 on /host type 9p (local)"
+                   ("/dev/vio9p0" "/host" "9p"))
+                  ("kernfs on /kern type kernfs (local)"
+                   nil)
+                  ("not a mount line"
+                   nil)))
+    (destructuring-bind (line expected) case
+      (test-assert (equal expected (storage--parse-netbsd-mount-line line))
+                   (format nil "netbsd mount parse ~S" line))))
+  (multiple-value-bind (total free)
+      (storage--parse-df-line
+       "/dev/sda1  10000  4000  6000  40% /")
+    (test-assert (= (* 10000 1024) total))
+    (test-assert (= (* 6000 1024) free)))
+  (multiple-value-bind (total free) (storage--parse-df-line nil)
+    (test-assert (null total))
+    (test-assert (null free)))
+  (let ((volumes (probe-storage-volumes)))
+    (test-assert (find "/" volumes
+                       :key #'storage-volume-mount-point
+                       :test #'string=)
+                 "the root volume is discovered")
+    (let ((root (find "/" volumes
+                      :key #'storage-volume-mount-point
+                      :test #'string=)))
+      (test-assert (eq ':storage-volume (resource-kind root)))
+      (test-assert (plusp (storage-volume-total-bytes root))))))
+
+
 (-> test-event-queries () t)
 (defun test-event-queries ()
   "Event logs answer kind, involvement, and time-range queries."
@@ -1258,6 +1301,7 @@
   (test-journal)
   (test-world-mutation)
   (test-network-control)
+  (test-storage)
   (test-event-queries)
   (test-activity-mailbox)
   (test-activity-failure)
