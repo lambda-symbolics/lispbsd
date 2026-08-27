@@ -83,6 +83,7 @@ the pointer. Returns INSPECTOR-WINDOW."))
                                           :window window
                                           :stack (list object)
                                           :package package)))
+    (setf (window-application window) inspector-window)
     (setf (window-event-handler window)
           (lambda (window event)
             (declare (ignore window))

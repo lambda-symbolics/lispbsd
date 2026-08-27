@@ -474,6 +474,7 @@
                                         :x 4 :y 4 :width 120 :height 80))
          (window (exec-window-window exec-window)))
     (desktop-attach-window desktop window)
+    (test-assert (eq exec-window (window-application window)))
     (labels ((type-string (string)
                (loop for character across string
                      do (desktop-dispatch-event
@@ -520,6 +521,7 @@
                                                   :width 120 :height 60))
          (window (inspector-window-window inspector-window)))
     (desktop-attach-window desktop window)
+    (test-assert (eq inspector-window (window-application window)))
     (test-assert (equal '(1 2 3) (inspector-window-object inspector-window)))
     (test-assert (= 0 (inspector-window-selection inspector-window)))
     (let ((content (window-content-bitmap window)))

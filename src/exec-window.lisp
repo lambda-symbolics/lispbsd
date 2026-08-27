@@ -67,6 +67,7 @@ created. The window's event handler feeds input to the Exec."
          (exec-window (make-instance 'exec-window
                                      :exec exec-object
                                      :window window)))
+    (setf (window-application window) exec-window)
     (setf (window-event-handler window)
           (lambda (window event)
             (declare (ignore window))

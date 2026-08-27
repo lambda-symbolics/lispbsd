@@ -92,6 +92,7 @@
    #:make-desktop
    #:make-window
    #:window
+   #:window-application
    #:window-contains-point-p
    #:window-content-bitmap
    #:window-desktop

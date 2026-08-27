@@ -120,6 +120,10 @@
     :initarg :event-handler
     :accessor window-event-handler
     :documentation "Function of (window input-event) receiving routed input, or NIL.")
+   (window-application
+    :initform nil
+    :accessor window-application
+    :documentation "The application object presenting this window, or NIL.")
    (window-desktop
     :initform nil
     :accessor window-desktop
