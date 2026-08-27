@@ -8,6 +8,27 @@
                 #:join-thread
                 #:make-thread
                 #:thread-alive-p)
+  (:import-from #:zpb-ttf
+                #:advance-width
+                #:ascender
+                #:close-font-loader
+                #:descender
+                #:find-glyph
+                #:full-name
+                #:kerning-offset
+                #:open-font-loader
+                #:units/em
+                #:xmax
+                #:xmin)
+  (:import-from #:net.tuxee.aa
+                #:cells-sweep
+                #:make-state)
+  (:import-from #:net.tuxee.paths
+                #:make-point)
+  (:import-from #:net.tuxee.paths-ttf
+                #:paths-from-glyph)
+  (:import-from #:net.tuxee.vectors
+                #:update-state)
   (:export
      ;; Types
      #:->
@@ -77,6 +98,11 @@
    #:make-bitmap-font
    #:make-fixed-font
    #:make-missing-glyph
+   #:make-truetype-font
+   #:truetype-font
+   #:truetype-font-loader
+   #:truetype-font-name
+   #:truetype-font-size
    ;; Windows and desktop
    #:*window-print-length*
    #:*window-print-level*

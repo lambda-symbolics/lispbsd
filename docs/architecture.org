@@ -30,7 +30,8 @@ The running system has five components with explicit interfaces:
 | =src/types.lisp= | Shared types and identifiers |
 | =src/conditions.lisp= | Domain conditions |
 | =src/bitmap.lisp= | 1-bit bitmap, bitblt, and drawing primitives |
-| =src/font.lisp= | Bitmap fonts, text drawing, built-in 8x8 font |
+| =src/font.lisp= | Font and glyph protocol, built-in 8x8 font |
+| =src/truetype.lisp= | TrueType faces rasterized via zpb-ttf and cl-vectors |
 | =src/window.lisp= | Overlapping windows, desktop stacking, composition |
 | =src/input.lisp= | Pointer and key events, desktop input routing |
 | =src/presentation.lisp= | Presentations tying window output to live objects |
@@ -57,6 +58,22 @@ The running system has five components with explicit interfaces:
 | =netbsd/conf/LISPBSD= | Multiboot kernel config copied into the NetBSD tree at build time |
 | =netbsd/console/lispbsd-console= | Intended getty replacement; SBCL on a pty |
 | =netbsd/console/profile= | Root profile that execs SBCL and loads the world |
+
+* Dependencies
+
+Third-party Common Lisp systems are vendored under =vendor/= so hosted
+and native builds need no network or Quicklisp:
+
+- =vendor/zpb-ttf=: TrueType parser, BSD license.
+  github.com/xach/zpb-ttf at commit =55aab7d2aae5eaec63a6b26b5bbd2628864c7fc0=.
+- =vendor/cl-vectors=: polygon rasterizer and path library (systems
+  =cl-aa=, =cl-paths=, =cl-paths-ttf=, =cl-vectors=), MIT license.
+  github.com/fjolliton/cl-vectors at commit =f3d3e080b14a2ba44a2cb5196c17d7b5246fcec6=.
+
+=lispbsd.asd= pushes the vendor directories onto ASDF's central
+registry when the system definition loads. UI assets live under
+=assets/=; =assets/fonts/IBMPlexMono-Regular.ttf= is IBM Plex Mono,
+licensed under the SIL OFL 1.1 (see =assets/fonts/LICENSE-IBM-Plex.txt=).
 
 * Hosted prototype
 

@@ -3,7 +3,7 @@
 set -eu
 ROOT=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 export CL_SOURCE_REGISTRY='(:source-registry :ignore-inherited-configuration)'
-tar -C "$ROOT" -cf "$ROOT/vm/lispbsd.tar" lispbsd.asd boot.lisp src
+tar -C "$ROOT" -cf "$ROOT/vm/lispbsd.tar" lispbsd.asd boot.lisp src vendor assets
 export PKG_DISK="$ROOT/vm/lispbsd.tar"
-export KERNEL_APPEND="${KERNEL_APPEND:-console=com root=wd0a -s}"
+export KERNEL_APPEND="${KERNEL_APPEND:-console=com root=wd0a}"
 exec "$ROOT/script/guest" --send "$ROOT/netbsd/console/install.lisp"

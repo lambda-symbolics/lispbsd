@@ -1,8 +1,21 @@
+;; Vendored third-party systems live under vendor/; see the dependency
+;; notes in docs/architecture.org.
+(dolist (vendored '("vendor/zpb-ttf/" "vendor/cl-vectors/"))
+  (pushnew (merge-pathnames vendored
+                            (make-pathname :name nil :type nil
+                                           :defaults *load-truename*))
+           asdf:*central-registry*
+           :test #'equal))
+
+
 (defsystem #:lispbsd
   :description "A live Common Lisp operating environment on the NetBSD kernel."
   :author "Lukáš Hozda"
   :license "ISC"
   :version "0.0.1"
+  :depends-on (#:zpb-ttf
+               #:cl-vectors
+               #:cl-paths-ttf)
   :serial t
   :components ((:module "src"
                 :serial t
@@ -12,6 +25,7 @@
                              (:file "conditions")
                              (:file "bitmap")
                              (:file "font")
+                             (:file "truetype")
                              (:file "window")
                              (:file "input")
                              (:file "presentation")
