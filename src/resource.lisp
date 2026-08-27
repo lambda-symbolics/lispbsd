@@ -29,6 +29,42 @@
    "A typed object representing a finite or externally anchored thing."))
 
 
+(defclass operation ()
+  ((operation-name
+    :initarg :name
+    :reader operation-name
+    :documentation "Keyword naming the semantic operation.")
+   (operation-label
+    :initarg :label
+    :reader operation-label
+    :type string
+    :documentation "Human-readable label for menus and prompts.")
+   (operation-function
+    :initarg :function
+    :reader operation-function
+    :documentation "Function of the target object performing the operation."))
+  (:documentation
+   "A semantic operation on an object.
+
+One declaration serves human menus, listener commands, and future
+agent projections alike."))
+
+
+(-> make-operation (&key (:name keyword) (:label string)
+                        (:function function))
+    operation)
+(defun make-operation (&key name label function)
+  "Return an operation named NAME, shown as LABEL, performing FUNCTION."
+  (make-instance 'operation :name name :label label :function function))
+
+
+(defgeneric resource-operations (resource)
+  (:documentation
+   "Return the operations available on RESOURCE, most useful first.")
+  (:method ((resource t))
+    nil))
+
+
 (defclass network-interface (resource)
   ((network-interface-address
     :initarg :address

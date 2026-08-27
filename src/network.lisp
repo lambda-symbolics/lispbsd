@@ -157,6 +157,15 @@
   interface)
 
 
+(defmethod resource-operations ((resource network-interface))
+  (list (make-operation :name ':interface-up
+                        :label "Bring Up"
+                        :function #'interface-up)
+        (make-operation :name ':interface-down
+                        :label "Bring Down"
+                        :function #'interface-down)))
+
+
 (-> probe-network-substrate () network-substrate)
 (defun probe-network-substrate ()
   "Return the network substrate matching this host."
