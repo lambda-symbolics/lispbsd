@@ -39,4 +39,11 @@ inspector on the current world, both opening at the pointer."
                                   (desktop-attach-window
                                    desktop
                                    (event-window-window
-                                    (make-event-window :x x :y y)))))))
+                                    (make-event-window :x x :y y)))))
+        (make-menu-item :label "Resources"
+                        :value ':resources
+                        :action (lambda ()
+                                  (desktop-attach-window
+                                   desktop
+                                   (resource-window-window
+                                    (make-resource-window :x x :y y)))))))

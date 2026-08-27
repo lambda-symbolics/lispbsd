@@ -313,11 +313,17 @@
    #:storage-volume-free-bytes
    #:storage-volume-mount-point
    #:storage-volume-total-bytes
+   #:make-operation
+   #:operation
+   #:operation-function
+   #:operation-label
+   #:operation-name
    #:resource
    #:resource-id
    #:resource-kind
    #:resource-live-p
    #:resource-name
+   #:resource-operations
    ;; Activity
    #:activity
    #:activity-authorities
@@ -435,6 +441,18 @@
    #:event-window-selection
    #:event-window-window
    #:make-event-window
+   ;; Resource window
+   #:make-resource-window
+   #:resource-window
+   #:resource-window-handle-event
+   #:resource-window-inspect
+   #:resource-window-open-menu
+   #:resource-window-repaint
+   #:resource-window-resources
+   #:resource-window-selected-resource
+   #:resource-window-selection
+   #:resource-window-window
+   #:resource-window-world
    ;; Inspector window
    #:inspector-window
    #:inspector-window-ascend

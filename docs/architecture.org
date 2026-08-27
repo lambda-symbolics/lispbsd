@@ -59,6 +59,7 @@ The running system has five components with explicit interfaces:
 | =src/exec-window.lisp= | Exec presented in a desktop window |
 | =src/inspector-window.lisp= | Inspector presented in a desktop window |
 | =src/event-window.lisp= | Event browser presented in a desktop window |
+| =src/resource-window.lisp= | Resource browser with operation menus |
 | =src/system-menu.lisp= | Background context menu spawning system windows |
 | =tests/tests.lisp= | Hosted behavioral tests |
 | =boot.lisp= | Native console loader; loads the world from source |

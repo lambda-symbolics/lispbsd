@@ -1195,7 +1195,7 @@
                                                         :button ':right))
     (let ((menu (desktop-menu desktop)))
       (test-assert menu "a background right press opens the system menu")
-      (test-assert (equal '(:new-exec :inspect-world :world-events)
+      (test-assert (equal '(:new-exec :inspect-world :world-events :resources)
                           (mapcar #'menu-item-value (menu-items menu)))))
     (desktop-dispatch-event desktop (make-pointer-event :x 200 :y 200
                                                         :action ':release
@@ -1426,6 +1426,56 @@
       (ignore-errors (delete-file journal-path)))))
 
 
+(-> test-resource-window () t)
+(defun test-resource-window ()
+  "The resource browser lists resources and runs their operations."
+  (let* ((*system-font* *fixed-font*)
+         (world (make-hosted-world :name "resource-window-world"))
+         (desktop (make-desktop :width 400 :height 300)))
+    (unwind-protect
+         (let* ((mock (make-instance 'mock-network-substrate))
+                (*network-substrate* mock)
+                (resource-window (make-resource-window :world world
+                                                       :x 4 :y 4
+                                                       :width 240
+                                                       :height 120))
+                (window (resource-window-window resource-window))
+                (interface-index (position-if
+                                  (lambda (resource)
+                                    (typep resource 'network-interface))
+                                  (resource-window-resources
+                                   resource-window))))
+           (desktop-attach-window desktop window)
+           (test-assert (plusp (length (resource-window-resources
+                                        resource-window))))
+           (test-assert interface-index "an interface is listed")
+           (setf (resource-window-selection resource-window) interface-index)
+           (resource-window-repaint resource-window)
+           (let ((operations (resource-operations
+                              (resource-window-selected-resource
+                               resource-window))))
+             (test-assert (= 2 (length operations)))
+             (test-assert (equal '(:interface-up :interface-down)
+                                 (mapcar #'operation-name operations))))
+           (resource-window-open-menu resource-window 100 100)
+           (let ((menu (desktop-menu desktop)))
+             (test-assert menu "the operation menu opens")
+             (test-assert (equal '(:inspect :interface-up :interface-down)
+                                 (mapcar #'menu-item-value
+                                         (menu-items menu)))))
+           (desktop-dispatch-event desktop (make-key-event :key ':down))
+           (desktop-dispatch-event desktop (make-key-event :key ':return))
+           (test-assert (eq ':up (mock-network-substrate-state mock))
+                        "choosing Bring Up drives the substrate")
+           (test-assert (null (desktop-menu desktop)))
+           (desktop-dispatch-event desktop (make-key-event :key ':return))
+           (test-assert (= 2 (length (desktop-windows desktop)))
+                        "return inspects the selected resource")
+           (test-assert (typep (window-application (desktop-focus desktop))
+                               'inspector-window)))
+      (world-shutdown world))))
+
+
 (-> run-tests () t)
 (defun run-tests ()
   "Run the LispBSD test suite and signal an error on failure."
@@ -1458,6 +1508,7 @@
   (test-exec-window)
   (test-inspector-window)
   (test-event-window)
+  (test-resource-window)
   (test-presentation)
   (test-exec-inspect)
   (test-menu)

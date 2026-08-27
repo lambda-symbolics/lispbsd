@@ -53,6 +53,7 @@
                              (:file "inspector-window")
                              (:file "exec-window")
                              (:file "event-window")
+                             (:file "resource-window")
                              (:file "system-menu"))))
   :in-order-to ((test-op (test-op #:lispbsd/tests))))
 
