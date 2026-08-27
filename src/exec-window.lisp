@@ -42,7 +42,14 @@ ignored. Returns EXEC-WINDOW."))
                                                  (pointer-event-y event)))
            (desktop (window-desktop window)))
       (when (and presentation desktop)
-        (exec-window--inspect-presentation exec-window presentation desktop))))
+        (if (eq (pointer-event-button event) ':right)
+            (desktop-open-menu desktop
+                               (exec-window--presentation-menu-items
+                                exec-window presentation desktop)
+                               :x (pointer-event-x event)
+                               :y (pointer-event-y event))
+            (exec-window--inspect-presentation exec-window presentation
+                                               desktop)))))
   exec-window)
 
 
@@ -178,6 +185,17 @@ record is the input line prefixed with the prompt."
       (setf (exec-window-input exec-window)
             (subseq input 0 (1- (length input))))))
   exec-window)
+
+
+(-> exec-window--presentation-menu-items (exec-window presentation desktop)
+    list)
+(defun exec-window--presentation-menu-items (exec-window presentation desktop)
+  "Return the context menu entries for PRESENTATION."
+  (list (make-menu-item :label "Inspect"
+                        :value presentation
+                        :action (lambda ()
+                                  (exec-window--inspect-presentation
+                                   exec-window presentation desktop)))))
 
 
 (-> exec-window--inspect-presentation (exec-window presentation desktop)

@@ -112,6 +112,29 @@
    #:window-line-height
    #:window-line-y
    #:window-title-bar-height
+   ;; Menu
+   #:desktop-close-menu
+   #:desktop-menu
+   #:desktop-open-menu
+   #:make-menu
+   #:make-menu-item
+   #:menu
+   #:menu-choose
+   #:menu-chosen
+   #:menu-contains-point-p
+   #:menu-draw
+   #:menu-height
+   #:menu-item
+   #:menu-item-action
+   #:menu-item-at
+   #:menu-item-label
+   #:menu-item-value
+   #:menu-items
+   #:menu-select
+   #:menu-selection
+   #:menu-width
+   #:menu-x
+   #:menu-y
    #:desktop
    #:desktop-attach-window
    #:desktop-compose

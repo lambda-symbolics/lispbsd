@@ -27,6 +27,7 @@
                              (:file "font")
                              (:file "truetype")
                              (:file "window")
+                             (:file "menu")
                              (:file "input")
                              (:file "presentation")
                              (:file "bitmap-io")

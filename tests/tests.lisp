@@ -962,6 +962,91 @@
         (test-assert t)))))
 
 
+(-> test-menu () t)
+(defun test-menu ()
+  "Pop-up menus take all input, highlight, choose, and dismiss."
+  (let* ((*system-font* *fixed-font*)
+         (desktop (make-desktop :width 64 :height 64))
+         (chosen nil)
+         (items (list (make-menu-item :label "aa"
+                                      :action (lambda ()
+                                                (setf chosen ':aa)))
+                      (make-menu-item :label "bb"
+                                      :action (lambda ()
+                                                (setf chosen ':bb)))
+                      (make-menu-item :label "cc"))))
+    (let ((menu (desktop-open-menu desktop items :x 10 :y 10)))
+      (test-assert (eq menu (desktop-menu desktop)))
+      (test-assert (= 0 (menu-selection menu)))
+      (desktop-dispatch-event desktop (make-pointer-event :x 12 :y 24
+                                                          :action ':move))
+      (test-assert (= 1 (menu-selection menu))
+                   "motion highlights the entry under the pointer")
+      (desktop-dispatch-event desktop (make-key-event :key ':down))
+      (test-assert (= 2 (menu-selection menu)))
+      (desktop-dispatch-event desktop (make-key-event :key ':up))
+      (test-assert (= 1 (menu-selection menu)))
+      (desktop-compose desktop)
+      (let ((screen (desktop-screen desktop)))
+        (test-assert (= 1 (bitmap-pixel screen 10 10)) "menu border")
+        (test-assert (= 1 (bitmap-pixel screen 28 22))
+                     "highlighted entry is inverted")
+        (test-assert (= 0 (bitmap-pixel screen 28 14))
+                     "other entries stay paper"))
+      (desktop-dispatch-event desktop (make-key-event :key ':return))
+      (test-assert (eq ':bb chosen) "return chooses the highlighted entry")
+      (test-assert (null (desktop-menu desktop))))
+    (setf chosen nil)
+    (desktop-open-menu desktop items :x 10 :y 10)
+    (desktop-dispatch-event desktop (make-pointer-event :x 50 :y 50
+                                                        :action ':press
+                                                        :button ':left))
+    (test-assert (null (desktop-menu desktop))
+                 "a press outside dismisses the menu")
+    (test-assert (null chosen))
+    (desktop-open-menu desktop items :x 10 :y 10)
+    (desktop-dispatch-event desktop (make-pointer-event :x 12 :y 14
+                                                        :action ':press
+                                                        :button ':left))
+    (test-assert (eq ':aa chosen) "a press inside chooses that entry")
+    (test-assert (null (desktop-menu desktop)))))
+
+
+(-> test-exec-menu () t)
+(defun test-exec-menu ()
+  "A right press on an exec presentation opens its context menu."
+  (let* ((*system-font* *fixed-font*)
+         (desktop (make-desktop :width 400 :height 300))
+         (exec-window (make-exec-window :world nil
+                                        :package (find-package '#:lispbsd)
+                                        :x 4 :y 4 :width 120 :height 80))
+         (window (exec-window-window exec-window)))
+    (desktop-attach-window desktop window)
+    (loop for character across "(list 1 2)"
+          do (desktop-dispatch-event desktop
+                                     (make-key-event :key ':character
+                                                     :character character)))
+    (desktop-dispatch-event desktop (make-key-event :key ':return))
+    (desktop-dispatch-event desktop (make-pointer-event :x 8 :y 27
+                                                        :action ':press
+                                                        :button ':right))
+    (test-assert (desktop-menu desktop)
+                 "a right press over a presentation opens a menu")
+    (test-assert (= 1 (length (desktop-windows desktop)))
+                 "the menu opens before anything is inspected")
+    (test-assert (null (desktop-pointer-grab desktop))
+                 "opening a menu releases the pointer grab")
+    (desktop-dispatch-event desktop (make-pointer-event :x 8 :y 27
+                                                        :action ':release
+                                                        :button ':right))
+    (desktop-dispatch-event desktop (make-key-event :key ':return))
+    (test-assert (null (desktop-menu desktop)))
+    (test-assert (= 2 (length (desktop-windows desktop)))
+                 "choosing Inspect opens the inspector")
+    (test-assert (typep (window-application (desktop-focus desktop))
+                        'inspector-window))))
+
+
 (-> run-tests () t)
 (defun run-tests ()
   "Run the LispBSD test suite and signal an error on failure."
@@ -990,6 +1075,8 @@
   (test-inspector-window)
   (test-presentation)
   (test-exec-inspect)
+  (test-menu)
+  (test-exec-menu)
   (test-window-shadow)
   (test-window-close-box)
   (if *test-failures*

@@ -167,7 +167,11 @@
    (desktop-window-drag
     :initform nil
     :accessor desktop-window-drag
-    :documentation "Active title-bar drag as (window offset-x offset-y), or NIL."))
+    :documentation "Active title-bar drag as (window offset-x offset-y), or NIL.")
+   (desktop-menu
+    :initform nil
+    :accessor desktop-menu
+    :documentation "The open pop-up menu receiving all input, or NIL."))
   (:documentation
    "A monochrome desktop owning window stacking, focus, and composition."))
 
@@ -399,6 +403,9 @@ window's title bar is inverted. Returns the screen bitmap."
       (when (window-visible-p window)
         (desktop--draw-window-shadow desktop window)
         (window--draw window screen (eq window (desktop-focus desktop)))))
+    (let ((menu (desktop-menu desktop)))
+      (when menu
+        (menu-draw menu screen)))
     screen))
 
 

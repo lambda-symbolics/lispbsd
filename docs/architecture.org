@@ -33,6 +33,7 @@ The running system has five components with explicit interfaces:
 | =src/font.lisp= | Font and glyph protocol, built-in 8x8 font |
 | =src/truetype.lisp= | TrueType faces rasterized via zpb-ttf and cl-vectors |
 | =src/window.lisp= | Overlapping windows, desktop stacking, composition |
+| =src/menu.lisp= | Pop-up menus over the desktop |
 | =src/input.lisp= | Pointer and key events, desktop input routing |
 | =src/presentation.lisp= | Presentations tying window output to live objects |
 | =src/bitmap-io.lisp= | PBM bitmap files and desktop screenshots |

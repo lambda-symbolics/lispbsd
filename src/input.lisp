@@ -81,6 +81,10 @@ Key events go to the focused window."))
 
 
 (defmethod desktop-dispatch-event ((desktop desktop) (event pointer-event))
+  (let ((menu (desktop-menu desktop)))
+    (when menu
+      (desktop--menu-pointer desktop menu event)
+      (return-from desktop-dispatch-event nil)))
   (let ((x (pointer-event-x event))
         (y (pointer-event-y event)))
     (let ((window (or (desktop-pointer-grab desktop)
@@ -114,10 +118,57 @@ Key events go to the focused window."))
 
 
 (defmethod desktop-dispatch-event ((desktop desktop) (event key-event))
+  (let ((menu (desktop-menu desktop)))
+    (when menu
+      (desktop--menu-key desktop menu event)
+      (return-from desktop-dispatch-event nil)))
   (let ((window (desktop-focus desktop)))
     (when window
       (window--deliver-event window event))
     window))
+
+
+(-> desktop--menu-pointer (desktop menu pointer-event) t)
+(defun desktop--menu-pointer (desktop menu event)
+  "Route a pointer EVENT to the open MENU.
+
+Motion highlights the entry under the pointer; a press inside chooses
+that entry, and a press outside dismisses the menu."
+  (let ((x (pointer-event-x event))
+        (y (pointer-event-y event)))
+    (ecase (pointer-event-action event)
+      (:move
+       (let ((index (menu-item-at menu x y)))
+         (when index
+           (menu-select menu index))))
+      (:press
+       (let ((index (menu-item-at menu x y)))
+         (desktop-close-menu desktop)
+         (when index
+           (menu-select menu index)
+           (menu-choose menu))))
+      (:release
+       nil)))
+  nil)
+
+
+(-> desktop--menu-key (desktop menu key-event) t)
+(defun desktop--menu-key (desktop menu event)
+  "Route a key EVENT to the open MENU.
+
+Up and Down move the highlight, Return chooses, Escape dismisses."
+  (when (eq (key-event-action event) ':press)
+    (case (key-event-key event)
+      (:up
+       (menu-select menu (1- (menu-selection menu))))
+      (:down
+       (menu-select menu (1+ (menu-selection menu))))
+      (:return
+       (desktop-close-menu desktop)
+       (menu-choose menu))
+      (:escape
+       (desktop-close-menu desktop))))
+  nil)
 
 
 (-> make-pointer-event (&key (:x integer) (:y integer) (:action pointer-action)
