@@ -124,6 +124,10 @@
     :initform nil
     :accessor window-application
     :documentation "The application object presenting this window, or NIL.")
+   (window-presentations
+    :initform nil
+    :accessor window-presentations
+    :documentation "Presentations over the content bitmap, newest first.")
    (window-desktop
     :initform nil
     :accessor window-desktop

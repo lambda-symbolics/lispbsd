@@ -131,6 +131,20 @@
    #:pointer-event-button
    #:pointer-event-x
    #:pointer-event-y
+   ;; Presentation
+   #:make-presentation
+   #:presentation
+   #:presentation-contains-point-p
+   #:presentation-height
+   #:presentation-object
+   #:presentation-type
+   #:presentation-width
+   #:presentation-x
+   #:presentation-y
+   #:window-clear-presentations
+   #:window-presentation-at
+   #:window-presentations
+   #:window-present
    ;; Event
    #:emit-event
    #:event

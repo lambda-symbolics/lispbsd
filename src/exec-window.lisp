@@ -81,7 +81,8 @@ created. The window's event handler feeds input to the Exec."
   "Redraw the transcript and input line into the window content bitmap.
 
 The most recent lines that fit are shown, and a block cursor follows
-the input line."
+the input line. Visible transcript lines are recorded as presentations
+of their forms, values, and conditions."
   (let* ((window (exec-window-window exec-window))
          (content (window-content-bitmap window))
          (font *fixed-font*)
@@ -91,13 +92,23 @@ the input line."
          (dropped (max 0 (- (length lines) visible-count)))
          (visible (nthcdr dropped lines)))
     (bitmap-clear content)
+    (window-clear-presentations window)
     (loop for line in visible
           for index from 0
-          do (bitmap-draw-text content font line
+          for text = (first line)
+          for presented = (rest line)
+          do (bitmap-draw-text content font text
                                :x *window-text-margin*
-                               :y (window-line-y index)))
+                               :y (window-line-y index))
+             (when presented
+               (window-present window (rest presented)
+                               :type (first presented)
+                               :x *window-text-margin*
+                               :y (window-line-y index)
+                               :width (font-text-width font text)
+                               :height (bitmap-font-height font))))
     (let ((cursor-x (+ *window-text-margin*
-                       (font-text-width font (first (last visible)))))
+                       (font-text-width font (first (first (last visible))))))
           (cursor-y (window-line-y (1- (length visible)))))
       (bitmap-fill content :x cursor-x
                            :y cursor-y
@@ -108,22 +119,31 @@ the input line."
 
 (-> exec-window--lines (exec-window) list)
 (defun exec-window--lines (exec-window)
-  "Return the Exec transcript as a list of strings, oldest first.
+  "Return the Exec transcript as line records, oldest first.
 
-The final line is the input line prefixed with the prompt."
+Each record is (text . (type . object)) where the trailing pair names
+what the line presents, or (text . NIL) for the input line. The final
+record is the input line prefixed with the prompt."
   (let ((exec (exec-window-exec exec-window))
         (lines nil))
     (let ((*package* (exec-package exec))
           (*print-length* *window-print-length*)
           (*print-level* *window-print-level*))
       (dolist (entry (exec-history exec))
-        (push (format nil "> ~S" (exec-entry-form entry)) lines)
+        (push (cons (format nil "> ~S" (exec-entry-form entry))
+                    (cons ':form (exec-entry-form entry)))
+              lines)
         (let ((condition (exec-entry-condition entry)))
           (if condition
-              (push (format nil "Error: ~A" condition) lines)
+              (push (cons (format nil "Error: ~A" condition)
+                          (cons ':condition condition))
+                    lines)
               (dolist (value (exec-entry-values entry))
-                (push (format nil "~S" value) lines))))))
-    (push (format nil "> ~A" (exec-window-input exec-window)) lines)
+                (push (cons (format nil "~S" value)
+                            (cons ':value value))
+                      lines))))))
+    (push (cons (format nil "> ~A" (exec-window-input exec-window)) nil)
+          lines)
     (nreverse lines)))
 
 

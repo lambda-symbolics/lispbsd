@@ -558,6 +558,52 @@
                                                         :button ':left))))
 
 
+(-> test-presentation () t)
+(defun test-presentation ()
+  "Presentations tie window content regions to live objects."
+  (let* ((window (make-window :x 0 :y 0 :width 40 :height 40))
+         (first-presentation (window-present window 'alpha
+                                             :type ':symbol
+                                             :x 2 :y 2
+                                             :width 10 :height 8))
+         (second-presentation (window-present window 'beta
+                                              :type ':symbol
+                                              :x 5 :y 5
+                                              :width 10 :height 8)))
+    (test-assert (eq second-presentation (window-presentation-at window 7 18))
+                 "the newest presentation wins where regions overlap")
+    (test-assert (eq first-presentation (window-presentation-at window 4 15)))
+    (test-assert (null (window-presentation-at window 0 0))
+                 "points outside the content region present nothing")
+    (test-assert (eq 'beta (presentation-object second-presentation)))
+    (test-assert (eq ':symbol (presentation-type second-presentation)))
+    (window-clear-presentations window)
+    (test-assert (null (window-presentations window))))
+  (let* ((desktop (make-desktop :width 160 :height 120))
+         (exec-window (make-exec-window :world nil
+                                        :package (find-package '#:lispbsd)
+                                        :x 4 :y 4 :width 120 :height 80))
+         (window (exec-window-window exec-window)))
+    (desktop-attach-window desktop window)
+    (loop for character across "(list 1 2)"
+          do (desktop-dispatch-event desktop
+                                     (make-key-event :key ':character
+                                                     :character character)))
+    (desktop-dispatch-event desktop (make-key-event :key ':return))
+    (let ((form-presentation (window-presentation-at window 8 18))
+          (value-presentation (window-presentation-at window 8 27))
+          (input-presentation (window-presentation-at window 8 36)))
+      (test-assert form-presentation)
+      (test-assert (eq ':form (presentation-type form-presentation)))
+      (test-assert (equal '(list 1 2)
+                          (presentation-object form-presentation)))
+      (test-assert value-presentation)
+      (test-assert (eq ':value (presentation-type value-presentation)))
+      (test-assert (equal '(1 2) (presentation-object value-presentation)))
+      (test-assert (null input-presentation)
+                   "the input line presents nothing"))))
+
+
 (-> run-tests () t)
 (defun run-tests ()
   "Run the LispBSD test suite and signal an error on failure."
@@ -579,6 +625,7 @@
   (test-bitmap-io)
   (test-exec-window)
   (test-inspector-window)
+  (test-presentation)
   (if *test-failures*
       (error "~D assertion~:P failed of ~D:~%~{  ~A~%~}"
              (length *test-failures*)
