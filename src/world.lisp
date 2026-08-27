@@ -43,6 +43,10 @@
     :initform nil
     :reader world-journal
     :documentation "Durable mutation journal, or NIL for an ephemeral world.")
+   (world-break-handler
+    :initform nil
+    :accessor world-break-handler
+    :documentation "Function of (activity condition) deciding breaks, or NIL.")
    (world-authority-root
     :initarg :authority-root
     :initform (make-authority-set)

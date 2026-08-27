@@ -55,6 +55,7 @@
                              (:file "exec-window")
                              (:file "event-window")
                              (:file "resource-window")
+                             (:file "break-window")
                              (:file "system-menu"))))
   :in-order-to ((test-op (test-op #:lispbsd/tests))))
 

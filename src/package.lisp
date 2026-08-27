@@ -346,6 +346,7 @@
    ;; Activity
    #:activity
    #:activity-authorities
+   #:activity-breakable-p
    #:activity-children
    #:activity-failed-hook
    #:activity-id
@@ -408,6 +409,7 @@
    #:world
    #:world-activities
    #:world-authority-root
+   #:world-break-handler
    #:world-events
    #:world-generation
    #:world-history
@@ -460,6 +462,23 @@
    #:event-window-selection
    #:event-window-window
    #:make-event-window
+   ;; Break window
+   #:break-context
+   #:break-context-activity
+   #:break-context-backtrace
+   #:break-context-choose
+   #:break-context-condition
+   #:break-context-wait
+   #:break-window
+   #:break-window-context
+   #:break-window-handle-event
+   #:break-window-invoke
+   #:break-window-repaint
+   #:break-window-selection
+   #:break-window-window
+   #:desktop-install-break-handler
+   #:make-break-context
+   #:make-break-window
    ;; Resource window
    #:make-resource-window
    #:resource-window

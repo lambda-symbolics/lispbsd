@@ -1565,6 +1565,72 @@
       (world-shutdown world))))
 
 
+(-> test-break-window () t)
+(defun test-break-window ()
+  "Unhandled conditions suspend into break windows with live restarts."
+  (labels ((await (predicate)
+             (loop repeat 300
+                   do (when (funcall predicate)
+                        (return t))
+                      (sleep 0.02))))
+    (let* ((*system-font* *fixed-font*)
+           (world (make-hosted-world :name "break-world"))
+           (desktop (make-desktop :width 640 :height 400)))
+      (desktop-install-break-handler desktop :world world)
+      (unwind-protect
+           (progn
+             (let* ((runs 0)
+                    (activity (make-activity
+                               "breaks-once"
+                               (lambda (self)
+                                 (declare (ignore self))
+                                 (incf runs)
+                                 (when (< runs 2)
+                                   (error "first run breaks")))
+                               :world world)))
+               (start-activity activity)
+               (test-assert (await (lambda ()
+                                     (plusp (length
+                                             (desktop-windows desktop)))))
+                            "a break window opened")
+               (test-assert (eq (activity-state activity) ':debugging)
+                            "the failing activity suspends debugging")
+               (let ((application (window-application
+                                   (first (desktop-windows desktop)))))
+                 (test-assert (typep application 'break-window))
+                 (test-assert (break-context-backtrace
+                               (break-window-context application))
+                              "a backtrace was captured at the break"))
+               (desktop-dispatch-event desktop (make-key-event :key ':return))
+               (test-assert (await (lambda ()
+                                     (eq (activity-state activity)
+                                         ':stopped)))
+                            "retry runs the body again to completion")
+               (test-assert (= 2 runs))
+               (test-assert (null (desktop-windows desktop))
+                            "the break window closed after the choice"))
+             (let ((activity (make-activity
+                              "always-breaks"
+                              (lambda (self)
+                                (declare (ignore self))
+                                (error "always"))
+                              :world world)))
+               (start-activity activity)
+               (test-assert (await (lambda ()
+                                     (plusp (length
+                                             (desktop-windows desktop))))))
+               (desktop-dispatch-event desktop (make-key-event :key ':down))
+               (desktop-dispatch-event desktop (make-key-event :key ':return))
+               (test-assert (await (lambda ()
+                                     (eq (activity-state activity)
+                                         ':failed)))
+                            "abort fails the activity")
+               (test-assert (activity-condition activity))
+               (test-assert (find ':activity-failed (world-events world)
+                                  :key #'event-kind))))
+        (world-shutdown world)))))
+
+
 (-> run-tests () t)
 (defun run-tests ()
   "Run the LispBSD test suite and signal an error on failure."
@@ -1585,6 +1651,7 @@
   (test-activity-mailbox)
   (test-activity-failure)
   (test-supervision)
+  (test-break-window)
   (test-exec)
   (test-inspector-and-definitions)
   (test-runtime-identity)

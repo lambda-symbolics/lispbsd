@@ -37,6 +37,11 @@
     :initform nil
     :accessor activity-supervisor
     :documentation "Supervisor responsible for this activity, or NIL.")
+   (activity-breakable-p
+    :initarg :breakable-p
+    :initform t
+    :reader activity-breakable-p
+    :documentation "Whether unhandled conditions may open a break.")
    (activity-children
     :initform nil
     :accessor activity-children
@@ -68,15 +73,17 @@
   (:documentation "A schedulable computation in the Lisp world."))
 
 
-(-> make-activity (string function &key (:world t) (:parent (option activity)))
+(-> make-activity (string function &key (:world t) (:parent (option activity))
+                         (:breakable-p boolean))
     activity)
-(defun make-activity (name function &key world parent)
+(defun make-activity (name function &key world parent (breakable-p t))
   "Return a new activity named NAME that will run FUNCTION."
   (let ((activity (make-instance 'activity
                                  :name name
                                  :function function
                                  :world world
-                                 :parent parent)))
+                                 :parent parent
+                                 :breakable-p breakable-p)))
     (when parent
       (push activity (activity-children parent)))
     activity))
@@ -98,26 +105,63 @@ The null method does nothing, for unsupervised activities.")
     activity))
 
 
+(-> activity--fail (activity condition) t)
+(defun activity--fail (activity condition)
+  "Record CONDITION as ACTIVITY's failure and notify its supervisor."
+  (setf (activity-condition activity) condition)
+  (activity--set-state activity ':failed)
+  (let ((world (activity-world activity)))
+    (when world
+      (emit-event (world-history world)
+                  ':activity-failed
+                  :source activity
+                  :payload (list :condition condition))))
+  (activity-failed-hook (activity-supervisor activity) activity))
+
+
 (-> activity--run (activity) t)
 (defun activity--run (activity)
-  "Run ACTIVITY's body, recording failure or a clean stop."
-  (handler-case
-      (progn
-        (activity--set-state activity ':runnable)
-        (funcall (activity-function activity) activity)
-        (activity--set-state activity ':stopped))
-    (activity-stopped ()
-      (activity--set-state activity ':stopped))
-    (error (condition)
-      (setf (activity-condition activity) condition)
-      (activity--set-state activity ':failed)
-      (let ((world (activity-world activity)))
-        (when world
-          (emit-event (world-history world)
-                      ':activity-failed
-                      :source activity
-                      :payload (list :condition condition))))
-      (activity-failed-hook (activity-supervisor activity) activity))))
+  "Run ACTIVITY's body, recording failure or a clean stop.
+
+While the world has a break handler and the activity is breakable, an
+unhandled condition suspends the computation in a debuggable state and
+the handler chooses ':retry or ':abort."
+  (loop
+    (let ((outcome
+            (block attempt
+              (handler-case
+                  (handler-bind
+                      ((error
+                         (lambda (condition)
+                           (let ((break-handler
+                                   (let ((world (activity-world activity)))
+                                     (and world
+                                          (world-break-handler world)))))
+                             (when (and break-handler
+                                        (activity-breakable-p activity)
+                                        (not (typep condition
+                                                    'activity-stopped)))
+                               (activity--set-state activity ':debugging)
+                               (let ((choice (funcall break-handler
+                                                      activity condition)))
+                                 (when choice
+                                   (return-from attempt
+                                     (cons choice condition)))))))))
+                    (activity--set-state activity ':runnable)
+                    (funcall (activity-function activity) activity)
+                    (activity--set-state activity ':stopped))
+                (activity-stopped ()
+                  (activity--set-state activity ':stopped))
+                (error (condition)
+                  (activity--fail activity condition)))
+              nil)))
+      (cond ((null outcome)
+             (return nil))
+            ((eq (first outcome) ':retry)
+             (setf (activity-condition activity) nil))
+            (t
+             (activity--fail activity (rest outcome))
+             (return nil))))))
 
 
 (-> start-activity (activity) activity)
