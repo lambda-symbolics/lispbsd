@@ -604,6 +604,42 @@
                    "the input line presents nothing"))))
 
 
+(-> test-exec-inspect () t)
+(defun test-exec-inspect ()
+  "Clicking a presented value in the Exec opens an inspector on it."
+  (let* ((desktop (make-desktop :width 400 :height 300))
+         (exec-window (make-exec-window :world nil
+                                        :package (find-package '#:lispbsd)
+                                        :x 4 :y 4 :width 120 :height 80))
+         (window (exec-window-window exec-window)))
+    (desktop-attach-window desktop window)
+    (loop for character across "(list 1 2)"
+          do (desktop-dispatch-event desktop
+                                     (make-key-event :key ':character
+                                                     :character character)))
+    (desktop-dispatch-event desktop (make-key-event :key ':return))
+    (desktop-dispatch-event desktop (make-pointer-event :x 8 :y 27
+                                                        :action ':press
+                                                        :button ':left))
+    (desktop-dispatch-event desktop (make-pointer-event :x 8 :y 27
+                                                        :action ':release
+                                                        :button ':left))
+    (test-assert (= 2 (length (desktop-windows desktop))))
+    (let ((application (window-application (desktop-focus desktop))))
+      (test-assert (typep application 'inspector-window)
+                   "the new focused window is an inspector")
+      (test-assert (equal '(1 2) (inspector-window-object application))
+                   "the inspector shows the clicked value"))
+    (desktop-dispatch-event desktop (make-pointer-event :x 8 :y 46
+                                                        :action ':press
+                                                        :button ':left))
+    (desktop-dispatch-event desktop (make-pointer-event :x 8 :y 46
+                                                        :action ':release
+                                                        :button ':left))
+    (test-assert (= 2 (length (desktop-windows desktop)))
+                 "clicking an unpresented point opens nothing")))
+
+
 (-> run-tests () t)
 (defun run-tests ()
   "Run the LispBSD test suite and signal an error on failure."
@@ -626,6 +662,7 @@
   (test-exec-window)
   (test-inspector-window)
   (test-presentation)
+  (test-exec-inspect)
   (if *test-failures*
       (error "~D assertion~:P failed of ~D:~%~{  ~A~%~}"
              (length *test-failures*)

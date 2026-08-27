@@ -28,8 +28,8 @@
                              (:file "definition")
                              (:file "inspector")
                              (:file "exec")
-                             (:file "exec-window")
-                             (:file "inspector-window"))))
+                             (:file "inspector-window")
+                             (:file "exec-window"))))
   :in-order-to ((test-op (test-op #:lispbsd/tests))))
 
 

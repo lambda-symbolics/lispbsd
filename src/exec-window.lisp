@@ -34,6 +34,19 @@ ignored. Returns EXEC-WINDOW."))
 
 
 (defmethod exec-window-handle-event ((exec-window exec-window)
+                                     (event pointer-event))
+  (when (eq (pointer-event-action event) ':press)
+    (let* ((window (exec-window-window exec-window))
+           (presentation (window-presentation-at window
+                                                 (pointer-event-x event)
+                                                 (pointer-event-y event)))
+           (desktop (window-desktop window)))
+      (when (and presentation desktop)
+        (exec-window--inspect-presentation exec-window presentation desktop))))
+  exec-window)
+
+
+(defmethod exec-window-handle-event ((exec-window exec-window)
                                      (event key-event))
   (when (eq (key-event-action event) ':press)
     (let ((key (key-event-key event))
@@ -165,6 +178,19 @@ record is the input line prefixed with the prompt."
       (setf (exec-window-input exec-window)
             (subseq input 0 (1- (length input))))))
   exec-window)
+
+
+(-> exec-window--inspect-presentation (exec-window presentation desktop)
+    inspector-window)
+(defun exec-window--inspect-presentation (exec-window presentation desktop)
+  "Open an inspector on PRESENTATION's object beside the Exec window."
+  (let* ((window (exec-window-window exec-window))
+         (inspector-window (make-inspector-window
+                            :object (presentation-object presentation)
+                            :x (+ (window-x window) 24)
+                            :y (+ (window-y window) 24))))
+    (desktop-attach-window desktop (inspector-window-window inspector-window))
+    inspector-window))
 
 
 (-> exec-window--submit (exec-window) exec-window)
