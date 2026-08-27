@@ -257,5 +257,17 @@
    #:exec-window-repaint
    #:exec-window-window
    #:make-exec-window
+   ;; Inspector window
+   #:inspector-window
+   #:inspector-window-ascend
+   #:inspector-window-descend
+   #:inspector-window-handle-event
+   #:inspector-window-object
+   #:inspector-window-package
+   #:inspector-window-repaint
+   #:inspector-window-selection
+   #:inspector-window-stack
+   #:inspector-window-window
+   #:make-inspector-window
    ;; Tests
    #:run-tests))

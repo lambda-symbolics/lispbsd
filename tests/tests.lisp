@@ -511,6 +511,51 @@
                      "unreadable input is recorded, not signaled")))))
 
 
+(-> test-inspector-window () t)
+(defun test-inspector-window ()
+  "The inspector window navigates, descends, and renders object parts."
+  (let* ((desktop (make-desktop :width 160 :height 80))
+         (inspector-window (make-inspector-window :object (list 1 2 3)
+                                                  :x 2 :y 2
+                                                  :width 120 :height 60))
+         (window (inspector-window-window inspector-window)))
+    (desktop-attach-window desktop window)
+    (test-assert (equal '(1 2 3) (inspector-window-object inspector-window)))
+    (test-assert (= 0 (inspector-window-selection inspector-window)))
+    (let ((content (window-content-bitmap window)))
+      (test-assert (= 1 (bitmap-pixel content 100 11))
+                   "selected part line is inverted")
+      (test-assert (= 0 (bitmap-pixel content 100 20))
+                   "unselected part line stays paper"))
+    (labels ((press-key (key)
+               (desktop-dispatch-event desktop (make-key-event :key key))))
+      (press-key ':down)
+      (test-assert (= 1 (inspector-window-selection inspector-window)))
+      (press-key ':down)
+      (press-key ':down)
+      (test-assert (= 2 (inspector-window-selection inspector-window))
+                   "selection clamps at the last part")
+      (press-key ':up)
+      (test-assert (= 1 (inspector-window-selection inspector-window)))
+      (press-key ':return)
+      (test-assert (equal '(2 3) (inspector-window-object inspector-window))
+                   "descending inspects the selected part's value")
+      (test-assert (= 0 (inspector-window-selection inspector-window)))
+      (press-key ':backspace)
+      (test-assert (equal '(1 2 3) (inspector-window-object inspector-window)))
+      (press-key ':backspace)
+      (test-assert (equal '(1 2 3) (inspector-window-object inspector-window))
+                   "ascending at the root stays put"))
+    (desktop-dispatch-event desktop (make-pointer-event :x 10 :y 42
+                                                        :action ':press
+                                                        :button ':left))
+    (test-assert (= 2 (inspector-window-selection inspector-window))
+                 "a pointer press selects the part under the pointer")
+    (desktop-dispatch-event desktop (make-pointer-event :x 10 :y 42
+                                                        :action ':release
+                                                        :button ':left))))
+
+
 (-> run-tests () t)
 (defun run-tests ()
   "Run the LispBSD test suite and signal an error on failure."
@@ -531,6 +576,7 @@
   (test-input)
   (test-bitmap-io)
   (test-exec-window)
+  (test-inspector-window)
   (if *test-failures*
       (error "~D assertion~:P failed of ~D:~%~{  ~A~%~}"
              (length *test-failures*)
