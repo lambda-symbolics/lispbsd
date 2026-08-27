@@ -878,6 +878,90 @@
       (world-shutdown world))))
 
 
+(defclass mock-network-substrate (network-substrate)
+  ((mock-network-substrate-state
+    :initform ':down
+    :accessor mock-network-substrate-state
+    :documentation "Interface state stored by the mock.")
+   (mock-network-substrate-addresses
+    :initform nil
+    :accessor mock-network-substrate-addresses
+    :documentation "Addresses stored by the mock."))
+  (:documentation "In-memory network substrate for protocol tests."))
+
+(defmethod network-substrate-interface-state ((substrate mock-network-substrate)
+                                              interface)
+  (declare (ignore interface))
+  (mock-network-substrate-state substrate))
+
+(defmethod network-substrate-set-interface-state ((substrate mock-network-substrate)
+                                                  interface state)
+  (declare (ignore interface))
+  (setf (mock-network-substrate-state substrate) state))
+
+(defmethod network-substrate-interface-addresses ((substrate mock-network-substrate)
+                                                  interface)
+  (declare (ignore interface))
+  (mock-network-substrate-addresses substrate))
+
+(defmethod network-substrate-add-interface-address ((substrate mock-network-substrate)
+                                                    interface address)
+  (declare (ignore interface))
+  (push address (mock-network-substrate-addresses substrate)))
+
+(defmethod network-substrate-remove-interface-address ((substrate mock-network-substrate)
+                                                       interface address)
+  (declare (ignore interface))
+  (setf (mock-network-substrate-addresses substrate)
+        (remove address (mock-network-substrate-addresses substrate))))
+
+
+(-> test-network-control () t)
+(defun test-network-control ()
+  "Interface operations run through the substrate protocol."
+  (dolist (case '(("	inet 10.0.2.15/24 broadcast 10.0.2.255 flags 0x0"
+                   :ipv4 "10.0.2.15" 24)
+                  ("	inet6 fe80::5054:ff:fe12:3456%wm0/64 flags 0x8"
+                   :ipv6 "fe80::5054:ff:fe12:3456" 64)
+                  ("	inet 127.0.0.1/8 flags 0x0"
+                   :ipv4 "127.0.0.1" 8)))
+    (destructuring-bind (line family value prefix) case
+      (let ((address (netbsd-network--parse-address-line line)))
+        (test-assert address (format nil "parse ~S" line))
+        (when address
+          (test-assert (eq family (network-address-family address)))
+          (test-assert (string= value (network-address-value address)))
+          (test-assert (eql prefix (network-address-prefix-length address)))))))
+  (test-assert (null (netbsd-network--parse-address-line "	status: active")))
+  (test-assert (null (netbsd-network--parse-address-line "")))
+  (test-assert (netbsd-network--flags-up-p
+                "wm0: flags=0x8843<UP,BROADCAST,RUNNING,SIMPLEX,MULTICAST> mtu 1500"))
+  (test-assert (not (netbsd-network--flags-up-p
+                     "wm0: flags=0x8802<BROADCAST,SIMPLEX,MULTICAST> mtu 1500")))
+  (let ((interface (make-instance 'network-interface :name "mock0"))
+        (*network-substrate* (make-instance 'mock-network-substrate)))
+    (test-assert (eq ':down (interface-state interface)))
+    (interface-up interface)
+    (test-assert (eq ':up (interface-state interface)))
+    (let ((address (make-network-address :value "10.0.0.5"
+                                         :family ':ipv4
+                                         :prefix-length 24)))
+      (interface-add-address interface address)
+      (test-assert (member address (interface-addresses interface)))
+      (interface-remove-address interface address)
+      (test-assert (null (interface-addresses interface))))
+    (interface-down interface)
+    (test-assert (eq ':down (interface-state interface))))
+  (let ((interface (make-instance 'network-interface :name "none0"))
+        (*network-substrate* nil))
+    (handler-case
+        (progn
+          (interface-up interface)
+          (test-assert nil "operations need a substrate"))
+      (network-operation-unsupported ()
+        (test-assert t)))))
+
+
 (-> run-tests () t)
 (defun run-tests ()
   "Run the LispBSD test suite and signal an error on failure."
@@ -889,6 +973,7 @@
   (test-generation-roundtrip)
   (test-journal)
   (test-world-mutation)
+  (test-network-control)
   (test-activity-mailbox)
   (test-activity-failure)
   (test-exec)

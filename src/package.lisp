@@ -247,6 +247,33 @@
    #:network-interface-address
    #:network-interface-operstate
    #:probe-hosted-machine
+   ;; Network control
+   #:*network-substrate*
+   #:interface-add-address
+   #:interface-addresses
+   #:interface-down
+   #:interface-remove-address
+   #:interface-state
+   #:interface-up
+   #:linux-network-substrate
+   #:make-network-address
+   #:netbsd-network-substrate
+   #:network-address
+   #:network-address-family
+   #:network-address-prefix-length
+   #:network-address-value
+   #:network-error
+   #:network-operation-failed
+   #:network-operation-failed-detail
+   #:network-operation-failed-operation
+   #:network-operation-unsupported
+   #:network-substrate
+   #:network-substrate-add-interface-address
+   #:network-substrate-interface-addresses
+   #:network-substrate-interface-state
+   #:network-substrate-remove-interface-address
+   #:network-substrate-set-interface-state
+   #:probe-network-substrate
    #:resource
    #:resource-id
    #:resource-kind

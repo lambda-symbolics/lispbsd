@@ -121,6 +121,7 @@
     (let ((machine (or (world-machine world) (probe-hosted-machine))))
       (setf (world-machine world) machine)
       (setf (world-resources world) (copy-list (machine-resources machine)))
+      (setf *network-substrate* (probe-network-substrate))
       (world--set-phase world ':machine-attached))
     (grant-authority (world-authority-root world)
                      world

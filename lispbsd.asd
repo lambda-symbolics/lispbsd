@@ -37,6 +37,7 @@
                              (:file "runtime-sbcl")
                              (:file "resource")
                              (:file "machine")
+                             (:file "network")
                              (:file "activity")
                              (:file "generation")
                              (:file "world")

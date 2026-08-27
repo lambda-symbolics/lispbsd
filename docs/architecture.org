@@ -43,6 +43,7 @@ The running system has five components with explicit interfaces:
 | =src/runtime-sbcl.lisp= | SBCL adapter |
 | =src/resource.lisp= | Resource objects |
 | =src/machine.lisp= | Hosted machine inventory |
+| =src/network.lisp= | Interface control protocol over pluggable substrates |
 | =src/activity.lisp= | Schedulable computations |
 | =src/generation.lisp= | Generation metadata |
 | =src/world.lisp= | Live world and startup phases |
