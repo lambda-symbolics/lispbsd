@@ -145,11 +145,15 @@
     (unwind-protect
          (let* ((exec (make-exec :world world :package (find-package '#:lispbsd)))
                 (ok (exec-evaluate exec "(+ 1 2)"))
-                (bad (exec-evaluate exec "(error \"nope\")")))
+                (bad (exec-evaluate exec "(error \"nope\")"))
+                (unreadable (exec-evaluate exec "(unbalanced")))
            (test-assert (equal (exec-entry-values ok) '(3)))
            (test-assert (null (exec-entry-condition ok)))
            (test-assert (exec-entry-condition bad))
-           (test-assert (= 2 (length (exec-history exec)))))
+           (test-assert (equal (exec-entry-form bad) '(error "nope")))
+           (test-assert (exec-entry-condition unreadable))
+           (test-assert (equal (exec-entry-form unreadable) "(unbalanced"))
+           (test-assert (= 3 (length (exec-history exec)))))
       (world-shutdown world))))
 
 

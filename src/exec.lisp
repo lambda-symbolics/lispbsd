@@ -60,22 +60,39 @@
       input))
 
 
+(-> exec--evaluate-entry (exec (or string cons) t) exec-entry)
+(defun exec--evaluate-entry (exec input world)
+  "Read and evaluate INPUT for EXEC and return the resulting entry.
+
+A reader failure records the raw INPUT as the entry's form; an
+evaluation failure records the successfully read form."
+  (block nil
+    (let ((form (handler-case
+                    (exec--read exec input)
+                  (error (condition)
+                    (return (make-instance 'exec-entry
+                                           :form input
+                                           :condition condition))))))
+      (handler-case
+          (let ((*world* world)
+                (*package* (exec-package exec)))
+            (make-instance 'exec-entry
+                           :form form
+                           :values (multiple-value-list (eval form))))
+        (error (condition)
+          (make-instance 'exec-entry
+                         :form form
+                         :condition condition))))))
+
+
 (-> exec-evaluate (exec (or string cons)) exec-entry)
 (defun exec-evaluate (exec input)
-  "Evaluate INPUT in EXEC and record the result."
-  (let* ((form (exec--read exec input))
-         (world (exec-world exec))
-         (entry
-           (handler-case
-               (let ((*world* world)
-                     (*package* (exec-package exec)))
-                 (make-instance 'exec-entry
-                                :form form
-                                :values (multiple-value-list (eval form))))
-             (error (condition)
-               (make-instance 'exec-entry
-                              :form form
-                              :condition condition)))))
+  "Evaluate INPUT in EXEC and record the result.
+
+Reader failures and evaluation failures are both recorded on the
+entry. When INPUT cannot be read, the entry's form is the raw input."
+  (let* ((world (exec-world exec))
+         (entry (exec--evaluate-entry exec input world)))
     (setf (exec-history exec)
           (nconc (exec-history exec) (list entry)))
     (when world
@@ -84,5 +101,5 @@
                       ':exec-error
                       ':exec-evaluated)
                   :source exec
-                  :payload (list :form form)))
+                  :payload (list :form (exec-entry-form entry))))
     entry))
