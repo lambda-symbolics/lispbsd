@@ -14,6 +14,7 @@
                              (:file "font")
                              (:file "window")
                              (:file "input")
+                             (:file "bitmap-io")
                              (:file "event")
                              (:file "authority")
                              (:file "runtime")

@@ -397,6 +397,44 @@
                  "key events with no focused window go nowhere")))
 
 
+(-> test-bitmap-io () t)
+(defun test-bitmap-io ()
+  "Bitmaps round-trip through PBM files and screenshots capture the screen."
+  (let ((path (merge-pathnames (format nil "lispbsd-pbm-~A.pbm" (make-object-id))
+                               (uiop:temporary-directory))))
+    (unwind-protect
+         (progn
+           (let ((bitmap (make-bitmap 10 3)))
+             (bitmap-draw-rectangle bitmap :x 0 :y 0 :width 10 :height 3)
+             (setf (bitmap-pixel bitmap 4 1) 1)
+             (bitmap-write-pbm bitmap path)
+             (let ((read-back (bitmap-read-pbm path)))
+               (test-assert (= 10 (bitmap-width read-back)))
+               (test-assert (= 3 (bitmap-height read-back)))
+               (test-assert (equal (bitmap-ascii bitmap)
+                                   (bitmap-ascii read-back)))))
+           (let ((desktop (make-desktop :width 24 :height 24)))
+             (desktop-attach-window desktop (make-window :title "s" :x 2 :y 2
+                                                         :width 20 :height 16))
+             (desktop-screenshot desktop path)
+             (let ((screen (bitmap-read-pbm path)))
+               (test-assert (= 24 (bitmap-width screen)))
+               (test-assert (= 1 (bitmap-pixel screen 0 0))
+                            "screenshot keeps the background stipple")
+               (test-assert (= 1 (bitmap-pixel screen 2 2))
+                            "screenshot keeps the window border")))
+           (with-open-file (stream path :direction ':output
+                                        :if-exists ':supersede)
+             (write-string "not a bitmap" stream))
+           (handler-case
+               (progn
+                 (bitmap-read-pbm path)
+                 (test-assert nil "bitmap-read-pbm should reject garbage"))
+             (invalid-bitmap-file ()
+               (test-assert t))))
+      (ignore-errors (delete-file path)))))
+
+
 (-> run-tests () t)
 (defun run-tests ()
   "Run the LispBSD test suite and signal an error on failure."
@@ -415,6 +453,7 @@
   (test-font)
   (test-window)
   (test-input)
+  (test-bitmap-io)
   (if *test-failures*
       (error "~D assertion~:P failed of ~D:~%~{  ~A~%~}"
              (length *test-failures*)

@@ -26,6 +26,7 @@
    #:world-error
    #:world-phase-error
    #:bitmap-error
+   #:invalid-bitmap-file
    #:invalid-bitmap-size
    #:unknown-raster-operation
    #:invalid-window-geometry
@@ -44,8 +45,10 @@
    #:bitmap-fill
    #:bitmap-height
    #:bitmap-pixel
+   #:bitmap-read-pbm
    #:bitmap-row-string
    #:bitmap-width
+   #:bitmap-write-pbm
    #:bitblt
    #:make-bitmap
    #:raster-operation
@@ -77,6 +80,7 @@
    #:desktop-id
    #:desktop-pointer-grab
    #:desktop-screen
+   #:desktop-screenshot
    #:desktop-window-at
    #:desktop-windows
    #:make-desktop
