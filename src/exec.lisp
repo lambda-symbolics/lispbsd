@@ -44,9 +44,9 @@
    "Primary interactive evaluation surface of the Machine."))
 
 
-(-> make-exec (&key (:world world) (:package package)) exec)
+(-> make-exec (&key (:world (option world)) (:package package)) exec)
 (defun make-exec (&key (world *world*) (package *package*))
-  "Return a new Exec bound to WORLD."
+  "Return a new Exec bound to WORLD, or to no world when WORLD is NIL."
   (make-instance 'exec :world world :package package))
 
 
