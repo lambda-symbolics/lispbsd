@@ -103,6 +103,28 @@
       (ignore-errors (delete-file path)))))
 
 
+(-> test-event-queries () t)
+(defun test-event-queries ()
+  "Event logs answer kind, involvement, and time-range queries."
+  (let ((log (make-event-log))
+        (subject (make-object-id)))
+    (emit-event log ':first :source 'alpha)
+    (emit-event log ':second :payload (list :subject subject))
+    (emit-event log ':first :source 'beta)
+    (test-assert (= 2 (length (events-of-kind log ':first))))
+    (test-assert (= 1 (length (events-of-kind log ':second))))
+    (test-assert (null (events-of-kind log ':third)))
+    (test-assert (= 1 (length (events-involving log 'alpha)))
+                 "source involvement is found")
+    (let ((involving (events-involving log subject)))
+      (test-assert (= 1 (length involving))
+                   "payload involvement is found")
+      (test-assert (eq ':second (event-kind (first involving)))))
+    (test-assert (null (events-involving log 'gamma)))
+    (test-assert (= 3 (length (events-since log 0))))
+    (test-assert (null (events-since log (+ (current-timestamp) 10))))))
+
+
 (-> test-activity-mailbox () t)
 (defun test-activity-mailbox ()
   "Activities receive sent objects and stop cleanly."
@@ -1099,6 +1121,7 @@
   (test-journal)
   (test-world-mutation)
   (test-network-control)
+  (test-event-queries)
   (test-activity-mailbox)
   (test-activity-failure)
   (test-exec)

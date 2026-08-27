@@ -216,6 +216,9 @@
    #:event-timestamp
    #:event-log
    #:event-log-events
+   #:events-involving
+   #:events-of-kind
+   #:events-since
    #:make-event-log
    ;; Journal
    #:invalid-journal-record

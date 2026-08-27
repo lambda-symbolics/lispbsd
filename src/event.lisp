@@ -62,3 +62,35 @@
       (setf (event-log-events log)
             (nconc (event-log-events log) (list event))))
     event))
+
+
+(-> events-of-kind (event-log keyword) list)
+(defun events-of-kind (log kind)
+  "Return LOG's events of KIND in chronological order."
+  (with-lock-held ((event-log-lock log))
+    (remove-if-not (lambda (event)
+                     (eq (event-kind event) kind))
+                   (event-log-events log))))
+
+
+(-> events-involving (event-log t) list)
+(defun events-involving (log object)
+  "Return LOG's events whose source or payload mentions OBJECT.
+
+Payload property values are compared with EQL, so stable identifiers
+and live objects both work."
+  (with-lock-held ((event-log-lock log))
+    (loop for event in (event-log-events log)
+          when (or (eql (event-source event) object)
+                   (loop for (nil value) on (event-payload event) by #'cddr
+                         thereis (eql value object)))
+            collect event)))
+
+
+(-> events-since (event-log timestamp) list)
+(defun events-since (log timestamp)
+  "Return LOG's events emitted at or after TIMESTAMP."
+  (with-lock-held ((event-log-lock log))
+    (remove-if (lambda (event)
+                 (< (event-timestamp event) timestamp))
+               (event-log-events log))))
