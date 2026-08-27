@@ -45,6 +45,7 @@ The running system has five components with explicit interfaces:
 | =src/resource.lisp= | Resource objects |
 | =src/machine.lisp= | Hosted machine inventory |
 | =src/network.lisp= | Interface control protocol over pluggable substrates |
+| =src/wireguard.lisp= | WireGuard tunnel lifecycle, keys, and peers |
 | =src/storage.lisp= | Mounted volume discovery and capacity |
 | =src/activity.lisp= | Schedulable computations |
 | =src/supervisor.lisp= | Policy-driven restart supervision of activities |

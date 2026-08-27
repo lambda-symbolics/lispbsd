@@ -146,6 +146,47 @@
       (test-assert (plusp (storage-volume-total-bytes root))))))
 
 
+(-> test-wireguard () t)
+(defun test-wireguard ()
+  "WireGuard reports parse into typed peers; control needs NetBSD."
+  (multiple-value-bind (listen-port peers)
+      (wireguard--parse-show
+       (format nil "interface: wg0~%~
+                    ~C~Aprivate-key: (hidden)~%~
+                    ~C~Alisten-port: 51820~%~
+                    ~C~Apeer: lab~%~
+                    ~C~C~Apublic-key: yCNvGe9jBmQoePwt3pb3~%~
+                    ~C~C~Aendpoint: 192.0.2.7:51820~%~
+                    ~C~C~Apreshared-key: (hidden)~%~
+                    ~C~C~Aallowed-ips: 10.9.0.2/32,10.9.1.0/24~%~
+                    ~C~C~Alatest-handshake: (never)~%"
+               #\Tab "" #\Tab "" #\Tab ""
+               #\Tab #\Tab "" #\Tab #\Tab "" #\Tab #\Tab ""
+               #\Tab #\Tab "" #\Tab #\Tab ""))
+    (test-assert (= 51820 listen-port))
+    (test-assert (= 1 (length peers)))
+    (let ((peer (first peers)))
+      (test-assert (string= "lab" (wireguard-peer-name peer)))
+      (test-assert (string= "yCNvGe9jBmQoePwt3pb3"
+                            (wireguard-peer-public-key peer)))
+      (test-assert (string= "192.0.2.7:51820" (wireguard-peer-endpoint peer)))
+      (test-assert (equal '("10.9.0.2/32" "10.9.1.0/24")
+                          (wireguard-peer-allowed-ips peer)))
+      (test-assert (null (wireguard-peer-latest-handshake peer))
+                   "a never handshake reads as NIL")))
+  (multiple-value-bind (listen-port peers)
+      (wireguard--parse-show "interface: wg0")
+    (test-assert (null listen-port))
+    (test-assert (null peers)))
+  (unless (machine--netbsd-p)
+    (handler-case
+        (progn
+          (wireguard-create "wg9")
+          (test-assert nil "wireguard control needs the NetBSD substrate"))
+      (network-operation-unsupported ()
+        (test-assert t)))))
+
+
 (-> test-event-queries () t)
 (defun test-event-queries ()
   "Event logs answer kind, involvement, and time-range queries."
@@ -1539,6 +1580,7 @@
   (test-world-mutation)
   (test-network-control)
   (test-storage)
+  (test-wireguard)
   (test-event-queries)
   (test-activity-mailbox)
   (test-activity-failure)

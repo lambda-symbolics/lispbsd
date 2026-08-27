@@ -307,6 +307,23 @@
    #:network-substrate-set-interface-state
    #:probe-netbsd-network-interfaces
    #:probe-network-substrate
+   ;; WireGuard
+   #:wireguard-add-peer
+   #:wireguard-create
+   #:wireguard-delete-peer
+   #:wireguard-destroy
+   #:wireguard-generate-key
+   #:wireguard-listen-port
+   #:wireguard-peer
+   #:wireguard-peer-allowed-ips
+   #:wireguard-peer-endpoint
+   #:wireguard-peer-latest-handshake
+   #:wireguard-peer-name
+   #:wireguard-peer-public-key
+   #:wireguard-peers
+   #:wireguard-set-listen-port
+   #:wireguard-set-private-key
+   #:wireguard-tunnel
    ;; Storage
    #:probe-storage-volumes
    #:storage-volume
