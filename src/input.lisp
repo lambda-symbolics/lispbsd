@@ -76,7 +76,8 @@
 A pointer press focuses, raises, and grabs the window under the
 pointer; subsequent pointer events go to the grabbed window until the
 release. A press on a title bar starts a drag that moves the window
-with the pointer. Key events go to the focused window."))
+with the pointer, and a press on the close box detaches the window.
+Key events go to the focused window."))
 
 
 (defmethod desktop-dispatch-event ((desktop desktop) (event pointer-event))
@@ -87,6 +88,9 @@ with the pointer. Key events go to the focused window."))
       (ecase (pointer-event-action event)
         (:press
          (when window
+           (when (eq (window-region-at window x y) ':close-box)
+             (desktop-detach-window desktop window)
+             (return-from desktop-dispatch-event window))
            (desktop-focus-window desktop window)
            (window-raise window)
            (setf (desktop-pointer-grab desktop) window)

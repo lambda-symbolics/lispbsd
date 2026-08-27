@@ -33,7 +33,7 @@
 
 (deftype window-region ()
   "A semantic region of a window's exterior rectangle."
-  '(member :border :title-bar :content))
+  '(member :border :title-bar :close-box :content))
 
 
 (define-condition window-error (lispbsd-error)
@@ -178,6 +178,21 @@
   (- height 3 *window-title-bar-height*))
 
 
+(-> window--close-box-geometry (window)
+    (values (option integer) (option integer) (option integer)))
+(defun window--close-box-geometry (window)
+  "Return the local X, Y, and size of WINDOW's close box.
+
+The box sits at the right end of the title bar. Returns three NILs
+when the window is too narrow to carry one."
+  (let* ((size (bitmap-font-height *fixed-font*))
+         (box-x (- (window-width window) size 3))
+         (box-y (+ 1 (floor (- *window-title-bar-height* size) 2))))
+    (if (plusp box-x)
+        (values box-x box-y size)
+        (values nil nil nil))))
+
+
 (-> make-window (&key (:title string) (:x integer) (:y integer)
                      (:width integer) (:height integer)
                      (:event-handler (option function)))
@@ -317,8 +332,9 @@ of (window input-event) called for input routed to the window."
 (defun window-region-at (window x y)
   "Return the window region under desktop point (X, Y), or NIL outside WINDOW.
 
-The border is the outermost one-pixel ring. The title bar includes its
-separator line. Everything else is content."
+The border is the outermost one-pixel ring. The close box sits at the
+right end of the title bar, which includes its separator line.
+Everything else is content."
   (block nil
     (unless (window-contains-point-p window x y)
       (return nil))
@@ -329,6 +345,14 @@ separator line. Everything else is content."
                 (= local-x (1- (window-width window)))
                 (= local-y (1- (window-height window))))
         (return ':border))
+      (multiple-value-bind (box-x box-y box-size)
+          (window--close-box-geometry window)
+        (when (and box-x
+                   (>= local-x box-x)
+                   (< local-x (+ box-x box-size))
+                   (>= local-y box-y)
+                   (< local-y (+ box-y box-size)))
+          (return ':close-box)))
       (if (<= local-y (1+ *window-title-bar-height*))
           ':title-bar
           ':content))))
@@ -397,6 +421,20 @@ The title bar is drawn ink-on-paper, or inverted when FOCUSED-P."
     (bitmap-draw-text title-bar *fixed-font* (window-title window)
                       :x 1 :y 1 :bit (if focused-p 0 1))
     (bitblt title-bar screen :dx (+ x 1) :dy (+ y 1))
+    (multiple-value-bind (box-x box-y box-size)
+        (window--close-box-geometry window)
+      (when box-x
+        (let ((box-bit (if focused-p 0 1)))
+          (bitmap-draw-rectangle screen :x (+ x box-x)
+                                        :y (+ y box-y)
+                                        :width box-size
+                                        :height box-size
+                                        :bit box-bit)
+          (bitmap-fill screen :x (+ x box-x 3)
+                              :y (+ y box-y 3)
+                              :width 2
+                              :height 2
+                              :bit box-bit))))
     (bitmap-draw-line screen
                       :x0 (+ x 1) :y0 (+ y 1 title-height)
                       :x1 (+ x width -2) :y1 (+ y 1 title-height))

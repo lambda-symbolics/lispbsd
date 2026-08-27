@@ -640,6 +640,30 @@
                  "clicking an unpresented point opens nothing")))
 
 
+(-> test-window-close-box () t)
+(defun test-window-close-box ()
+  "The title bar close box detaches the window on click."
+  (let* ((desktop (make-desktop :width 64 :height 64))
+         (window (make-window :title "w" :x 4 :y 4 :width 40 :height 30)))
+    (desktop-attach-window desktop window)
+    (test-assert (eq ':close-box (window-region-at window 36 8)))
+    (test-assert (eq ':title-bar (window-region-at window 10 8)))
+    (desktop-compose desktop)
+    (test-assert (= 0 (bitmap-pixel (desktop-screen desktop) 33 6))
+                 "close box outline is inverted on the focused bar")
+    (test-assert (= 1 (bitmap-pixel (desktop-screen desktop) 32 6))
+                 "the bar around the close box stays ink")
+    (desktop-dispatch-event desktop (make-pointer-event :x 36 :y 8
+                                                        :action ':press
+                                                        :button ':left))
+    (test-assert (null (desktop-windows desktop)))
+    (test-assert (null (window-desktop window)))
+    (test-assert (null (desktop-focus desktop))))
+  (let ((narrow (make-window :x 0 :y 0 :width 11 :height 20)))
+    (test-assert (eq ':title-bar (window-region-at narrow 5 5))
+                 "a window too narrow for a close box has no close region")))
+
+
 (-> run-tests () t)
 (defun run-tests ()
   "Run the LispBSD test suite and signal an error on failure."
@@ -663,6 +687,7 @@
   (test-inspector-window)
   (test-presentation)
   (test-exec-inspect)
+  (test-window-close-box)
   (if *test-failures*
       (error "~D assertion~:P failed of ~D:~%~{  ~A~%~}"
              (length *test-failures*)
