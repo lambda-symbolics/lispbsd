@@ -30,6 +30,7 @@ The running system has five components with explicit interfaces:
 | =src/types.lisp= | Shared types and identifiers |
 | =src/conditions.lisp= | Domain conditions |
 | =src/bitmap.lisp= | 1-bit bitmap, bitblt, and drawing primitives |
+| =src/font.lisp= | Bitmap fonts, text drawing, built-in 8x8 font |
 | =src/event.lisp= | Structured event log |
 | =src/authority.lisp= | Capability grants |
 | =src/runtime.lisp= | Runtime protocol |

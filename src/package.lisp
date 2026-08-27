@@ -45,6 +45,23 @@
    #:bitblt
    #:make-bitmap
    #:raster-operation
+   ;; Font
+   #:*fixed-font*
+   #:art->glyph
+   #:bitmap-draw-text
+   #:bitmap-font
+   #:bitmap-font-ascent
+   #:bitmap-font-glyphs
+   #:bitmap-font-height
+   #:bitmap-font-missing
+   #:bitmap-font-name
+   #:bitmap-font-width
+   #:font-glyph
+   #:font-text-width
+   #:install-glyph
+   #:make-bitmap-font
+   #:make-fixed-font
+   #:make-missing-glyph
    ;; Event
    #:emit-event
    #:event

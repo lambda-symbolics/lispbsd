@@ -11,6 +11,7 @@
                              (:file "threads")
                              (:file "conditions")
                              (:file "bitmap")
+                             (:file "font")
                              (:file "event")
                              (:file "authority")
                              (:file "runtime")

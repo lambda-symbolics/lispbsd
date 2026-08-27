@@ -240,6 +240,46 @@
       (test-assert t))))
 
 
+(-> test-font () t)
+(defun test-font ()
+  "The fixed font renders printable ASCII onto 1-bit bitmaps."
+  (let ((font *fixed-font*))
+    (test-assert (string= (bitmap-font-name font) "fixed-8x8"))
+    (test-assert (= 8 (bitmap-font-width font)))
+    (test-assert (= 8 (bitmap-font-height font)))
+    (loop for code from 32 to 126
+          for character = (code-char code)
+          do (test-assert (not (eq (font-glyph font character)
+                                   (bitmap-font-missing font)))
+                          (format nil "missing glyph for ~S" character)))
+    (test-assert (eq (font-glyph font (code-char 955))
+                     (bitmap-font-missing font)))
+    (test-assert (= 32 (font-text-width font "lisp")))
+    (let ((expected (mapcar (lambda (row)
+                              (substitute #\. #\Space row))
+                            (rest (assoc #\! *fixed-font-art*))))
+          (bitmap (make-bitmap 8 8)))
+      (bitmap-draw-text bitmap font "!" :x 0 :y 0)
+      (test-assert (equal expected (bitmap-ascii bitmap))))
+    (let ((expected (mapcar (lambda (row)
+                              (map 'string
+                                   (lambda (character)
+                                     (if (char= character #\#) #\. #\#))
+                                   row))
+                            (rest (assoc #\! *fixed-font-art*))))
+          (bitmap (make-bitmap 8 8 :initial-element 1)))
+      (bitmap-draw-text bitmap font "!" :x 0 :y 0 :bit 0)
+      (test-assert (equal expected (bitmap-ascii bitmap))))
+    (let ((bitmap (make-bitmap 8 8)))
+      (bitmap-draw-text bitmap font "ab" :x -4 :y -2)
+      (test-assert (= 1 (bitmap-pixel bitmap 0 0)))
+      (test-assert (= 1 (bitmap-pixel bitmap 5 0))))
+    (let ((missing (make-missing-glyph 8 8)))
+      (test-assert (= 1 (bitmap-pixel missing 0 0)))
+      (test-assert (= 1 (bitmap-pixel missing 4 4)))
+      (test-assert (= 0 (bitmap-pixel missing 1 1))))))
+
+
 (-> run-tests () t)
 (defun run-tests ()
   "Run the LispBSD test suite and signal an error on failure."
@@ -255,6 +295,7 @@
   (test-inspector-and-definitions)
   (test-runtime-identity)
   (test-bitmap)
+  (test-font)
   (if *test-failures*
       (error "~D assertion~:P failed of ~D:~%~{  ~A~%~}"
              (length *test-failures*)
