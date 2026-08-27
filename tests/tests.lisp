@@ -1047,6 +1047,46 @@
                         'inspector-window))))
 
 
+(-> test-system-menu () t)
+(defun test-system-menu ()
+  "A right press on the bare desktop offers system operations."
+  (let* ((*system-font* *fixed-font*)
+         (desktop (make-desktop :width 400 :height 300)))
+    (desktop-install-system-menu desktop)
+    (desktop-dispatch-event desktop (make-pointer-event :x 200 :y 200
+                                                        :action ':press
+                                                        :button ':right))
+    (let ((menu (desktop-menu desktop)))
+      (test-assert menu "a background right press opens the system menu")
+      (test-assert (equal '(:new-exec :inspect-world)
+                          (mapcar #'menu-item-value (menu-items menu)))))
+    (desktop-dispatch-event desktop (make-pointer-event :x 200 :y 200
+                                                        :action ':release
+                                                        :button ':right))
+    (desktop-dispatch-event desktop (make-key-event :key ':return))
+    (test-assert (= 1 (length (desktop-windows desktop)))
+                 "choosing New Exec attaches a window")
+    (test-assert (typep (window-application (first (desktop-windows desktop)))
+                        'exec-window))
+    (desktop-dispatch-event desktop (make-pointer-event :x 4 :y 290
+                                                        :action ':press
+                                                        :button ':right))
+    (desktop-dispatch-event desktop (make-pointer-event :x 4 :y 290
+                                                        :action ':release
+                                                        :button ':right))
+    (desktop-dispatch-event desktop (make-key-event :key ':down))
+    (desktop-dispatch-event desktop (make-key-event :key ':return))
+    (test-assert (= 2 (length (desktop-windows desktop))))
+    (test-assert (typep (window-application (desktop-focus desktop))
+                        'inspector-window)
+                 "choosing Inspect World attaches an inspector")
+    (desktop-dispatch-event desktop (make-pointer-event :x 200 :y 100
+                                                        :action ':press
+                                                        :button ':left))
+    (test-assert (null (desktop-menu desktop))
+                 "a left press on the background opens nothing")))
+
+
 (-> run-tests () t)
 (defun run-tests ()
   "Run the LispBSD test suite and signal an error on failure."
@@ -1077,6 +1117,7 @@
   (test-exec-inspect)
   (test-menu)
   (test-exec-menu)
+  (test-system-menu)
   (test-window-shadow)
   (test-window-close-box)
   (if *test-failures*

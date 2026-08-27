@@ -171,7 +171,11 @@
    (desktop-menu
     :initform nil
     :accessor desktop-menu
-    :documentation "The open pop-up menu receiving all input, or NIL."))
+    :documentation "The open pop-up menu receiving all input, or NIL.")
+   (desktop-menu-items-function
+    :initform nil
+    :accessor desktop-menu-items-function
+    :documentation "Function of (desktop x y) returning background menu entries, or NIL."))
   (:documentation
    "A monochrome desktop owning window stacking, focus, and composition."))
 

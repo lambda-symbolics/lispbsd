@@ -47,7 +47,8 @@
                              (:file "inspector")
                              (:file "exec")
                              (:file "inspector-window")
-                             (:file "exec-window"))))
+                             (:file "exec-window")
+                             (:file "system-menu"))))
   :in-order-to ((test-op (test-op #:lispbsd/tests))))
 
 

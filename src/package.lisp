@@ -114,7 +114,9 @@
    #:window-title-bar-height
    ;; Menu
    #:desktop-close-menu
+   #:desktop-install-system-menu
    #:desktop-menu
+   #:desktop-menu-items-function
    #:desktop-open-menu
    #:make-menu
    #:make-menu-item

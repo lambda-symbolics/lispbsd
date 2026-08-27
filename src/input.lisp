@@ -91,18 +91,26 @@ Key events go to the focused window."))
                       (desktop-window-at desktop x y))))
       (ecase (pointer-event-action event)
         (:press
-         (when window
-           (when (eq (window-region-at window x y) ':close-box)
-             (desktop-detach-window desktop window)
-             (return-from desktop-dispatch-event window))
-           (desktop-focus-window desktop window)
-           (window-raise window)
-           (setf (desktop-pointer-grab desktop) window)
-           (when (eq (window-region-at window x y) ':title-bar)
-             (setf (desktop-window-drag desktop)
-                   (list window
-                         (- x (window-x window))
-                         (- y (window-y window)))))))
+         (cond (window
+                (when (eq (window-region-at window x y) ':close-box)
+                  (desktop-detach-window desktop window)
+                  (return-from desktop-dispatch-event window))
+                (desktop-focus-window desktop window)
+                (window-raise window)
+                (setf (desktop-pointer-grab desktop) window)
+                (when (eq (window-region-at window x y) ':title-bar)
+                  (setf (desktop-window-drag desktop)
+                        (list window
+                              (- x (window-x window))
+                              (- y (window-y window))))))
+               ((and (eq (pointer-event-button event) ':right)
+                     (desktop-menu-items-function desktop))
+                (desktop-open-menu desktop
+                                   (funcall (desktop-menu-items-function
+                                             desktop)
+                                            desktop x y)
+                                   :x x
+                                   :y y))))
         (:release
          (setf (desktop-pointer-grab desktop) nil)
          (setf (desktop-window-drag desktop) nil))
