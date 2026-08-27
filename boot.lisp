@@ -3,11 +3,8 @@
 (require "asdf")
 
 (let ((root (make-pathname :name nil :type nil :defaults *load-truename*)))
-  (dolist (name '("package" "types" "threads" "conditions" "bitmap" "event"
-                  "authority" "runtime" "runtime-sbcl" "resource" "machine"
-                  "activity" "generation" "world" "definition" "inspector"
-                  "exec"))
-    (load (merge-pathnames (format nil "src/~A.lisp" name) root))))
+  (asdf:load-asd (merge-pathnames "lispbsd.asd" root))
+  (asdf:load-system "lispbsd"))
 
 (in-package #:lispbsd)
 
