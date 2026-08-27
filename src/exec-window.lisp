@@ -119,14 +119,14 @@ of their forms, values, and conditions."
                                :x *window-text-margin*
                                :y (window-line-y index)
                                :width (font-text-width font text)
-                               :height (bitmap-font-height font))))
+                               :height (font-height font))))
     (let ((cursor-x (+ *window-text-margin*
                        (font-text-width font (first (first (last visible))))))
           (cursor-y (window-line-y (1- (length visible)))))
       (bitmap-fill content :x cursor-x
                            :y cursor-y
-                           :width (bitmap-font-width font)
-                           :height (bitmap-font-height font))))
+                           :width (glyph-advance (font-glyph font #\Space))
+                           :height (font-height font))))
   exec-window)
 
 

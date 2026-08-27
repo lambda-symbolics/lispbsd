@@ -1,6 +1,26 @@
 (in-package #:lispbsd)
 
-;;;; -- Bitmap Fonts --
+;;;; -- Fonts and Glyphs --
+
+(defclass glyph ()
+  ((glyph-bitmap
+    :initarg :bitmap
+    :reader glyph-bitmap
+    :documentation "1-bit image of the glyph, aligned to the line top.")
+   (glyph-advance
+    :initarg :advance
+    :reader glyph-advance
+    :type integer
+    :documentation "Horizontal pen movement after drawing this glyph.")
+   (glyph-offset-x
+    :initarg :offset-x
+    :initform 0
+    :reader glyph-offset-x
+    :type integer
+    :documentation "Horizontal offset of the bitmap from the pen position."))
+  (:documentation
+   "One renderable character image with its metrics."))
+
 
 (defclass bitmap-font ()
   ((bitmap-font-name
@@ -26,13 +46,50 @@
    (bitmap-font-glyphs
     :initarg :glyphs
     :reader bitmap-font-glyphs
-    :documentation "Hash table mapping characters to glyph bitmaps.")
+    :documentation "Hash table mapping characters to glyph objects.")
    (bitmap-font-missing
     :initarg :missing
     :reader bitmap-font-missing
-    :documentation "Glyph drawn for characters with no defined bitmap."))
+    :documentation "Glyph drawn for characters with no defined image."))
   (:documentation
-   "An inspectable bitmap font used by the 1-bit display."))
+   "A fixed-cell bitmap font used by the 1-bit display."))
+
+
+(defgeneric font-name (font)
+  (:documentation "Return the human-readable name of FONT."))
+
+(defgeneric font-height (font)
+  (:documentation "Return the pixel height of FONT's line box."))
+
+(defgeneric font-ascent (font)
+  (:documentation "Return the pixels from FONT's line top to its baseline."))
+
+(defgeneric font-glyph (font character)
+  (:documentation "Return the glyph for CHARACTER in FONT.
+
+Characters without a defined image map to the font's missing glyph."))
+
+(defgeneric font-kerning (font left-character right-character)
+  (:documentation
+   "Return the pen adjustment between LEFT-CHARACTER and RIGHT-CHARACTER."))
+
+
+(defmethod font-name ((font bitmap-font))
+  (bitmap-font-name font))
+
+(defmethod font-height ((font bitmap-font))
+  (bitmap-font-height font))
+
+(defmethod font-ascent ((font bitmap-font))
+  (bitmap-font-ascent font))
+
+(defmethod font-glyph ((font bitmap-font) character)
+  (or (gethash character (bitmap-font-glyphs font))
+      (bitmap-font-missing font)))
+
+(defmethod font-kerning ((font t) left-character right-character)
+  (declare (ignore left-character right-character))
+  0)
 
 
 (-> art->glyph (list) bitmap)
@@ -51,7 +108,7 @@
 
 (-> make-missing-glyph (integer integer) bitmap)
 (defun make-missing-glyph (width height)
-  "Return a hollow box glyph of WIDTH by HEIGHT."
+  "Return a hollow box glyph bitmap of WIDTH by HEIGHT."
   (let ((bitmap (make-bitmap width height)))
     (bitmap-draw-rectangle bitmap :x 0 :y 0 :width width :height height)
     (setf (bitmap-pixel bitmap (floor width 2) (floor height 2)) 1)
@@ -64,51 +121,65 @@
     bitmap-font)
 (defun make-bitmap-font (&key (name "fixed") (width 8) (height 8)
                          (ascent 7) glyphs missing)
-  "Return a bitmap font with the supplied GLYPHS table."
+  "Return a bitmap font with the supplied GLYPHS table.
+
+MISSING is a bitmap drawn for undefined characters; it defaults to a
+hollow box."
   (make-instance 'bitmap-font
                  :name name
                  :width width
                  :height height
                  :ascent ascent
                  :glyphs (or glyphs (make-hash-table :test 'eql))
-                 :missing (or missing (make-missing-glyph width height))))
+                 :missing (make-instance 'glyph
+                                         :bitmap (or missing
+                                                     (make-missing-glyph width height))
+                                         :advance width)))
 
 
-(-> font-glyph (bitmap-font character) bitmap)
-(defun font-glyph (font character)
-  "Return the glyph bitmap for CHARACTER in FONT."
-  (or (gethash character (bitmap-font-glyphs font))
-      (bitmap-font-missing font)))
-
-
-(-> font-text-width (bitmap-font string) integer)
+(-> font-text-width (t string) integer)
 (defun font-text-width (font string)
-  "Return the pixel width of STRING in FONT."
-  (* (length string) (bitmap-font-width font)))
+  "Return the pixel width of STRING in FONT, including kerning."
+  (loop for index from 0 below (length string)
+        for character = (char string index)
+        sum (glyph-advance (font-glyph font character))
+        when (< (1+ index) (length string))
+          sum (font-kerning font character (char string (1+ index)))))
 
 
-(-> bitmap-draw-text (bitmap bitmap-font string &key (:x integer) (:y integer)
+(-> bitmap-draw-text (bitmap t string &key (:x integer) (:y integer)
                             (:bit bit))
     bitmap)
 (defun bitmap-draw-text (bitmap font string &key (x 0) (y 0) (bit 1))
-  "Draw STRING in FONT onto BITMAP at (X, Y). Glyphs are clipped. Returns BITMAP."
-  (let ((cell-width (bitmap-font-width font)))
+  "Draw STRING in FONT onto BITMAP with the line top at (X, Y).
+
+Glyphs are clipped. BIT 1 draws ink; BIT 0 draws the glyphs in paper.
+Returns BITMAP."
+  (let ((pen x))
     (loop for index from 0 below (length string)
           for character = (char string index)
           for glyph = (font-glyph font character)
-          for dest-x = (+ x (* index cell-width))
+          for glyph-x = (+ pen (glyph-offset-x glyph))
           do (if (eql bit 1)
-                 (bitblt glyph bitmap :dx dest-x :dy y :operation ':ior)
-                 (let ((inverted (bitmap-copy glyph)))
+                 (bitblt (glyph-bitmap glyph) bitmap
+                         :dx glyph-x :dy y :operation ':ior)
+                 (let ((inverted (bitmap-copy (glyph-bitmap glyph))))
                    (bitmap-fill inverted :operation ':not)
-                   (bitblt inverted bitmap :dx dest-x :dy y :operation ':and)))))
+                   (bitblt inverted bitmap
+                           :dx glyph-x :dy y :operation ':and)))
+             (incf pen (glyph-advance glyph))
+             (when (< (1+ index) (length string))
+               (incf pen (font-kerning font character
+                                       (char string (1+ index)))))))
   bitmap)
 
 
-(-> install-glyph (bitmap-font character list) bitmap)
+(-> install-glyph (bitmap-font character list) glyph)
 (defun install-glyph (font character rows)
   "Define CHARACTER in FONT from ASCII-art ROWS and return the glyph."
-  (let ((glyph (art->glyph rows)))
+  (let ((glyph (make-instance 'glyph
+                              :bitmap (art->glyph rows)
+                              :advance (bitmap-font-width font))))
     (setf (gethash character (bitmap-font-glyphs font)) glyph)
     glyph))
 

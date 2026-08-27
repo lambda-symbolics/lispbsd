@@ -158,7 +158,7 @@ visible."
                      (bitmap-fill content :x 0
                                           :y line-y
                                           :width (bitmap-width content)
-                                          :height (bitmap-font-height font))
+                                          :height (font-height font))
                      (bitmap-draw-text content font text
                                        :x *window-text-margin*
                                        :y line-y

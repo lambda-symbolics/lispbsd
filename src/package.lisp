@@ -63,8 +63,16 @@
    #:bitmap-font-missing
    #:bitmap-font-name
    #:bitmap-font-width
+   #:font-ascent
    #:font-glyph
+   #:font-height
+   #:font-kerning
+   #:font-name
    #:font-text-width
+   #:glyph
+   #:glyph-advance
+   #:glyph-bitmap
+   #:glyph-offset-x
    #:install-glyph
    #:make-bitmap-font
    #:make-fixed-font

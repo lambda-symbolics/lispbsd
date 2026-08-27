@@ -3,7 +3,7 @@
 ;;;; -- Windows and Desktop --
 
 (defparameter *window-title-bar-height*
-  (+ (bitmap-font-height *fixed-font*) 2)
+  (+ (font-height *fixed-font*) 2)
   "Pixel height of a window title bar, excluding its separator line.")
 
 (defparameter *window-text-margin*
@@ -26,7 +26,7 @@
 (-> window-line-height () integer)
 (defun window-line-height ()
   "Return the pixel height of one text line in window content."
-  (1+ (bitmap-font-height *fixed-font*)))
+  (1+ (font-height *fixed-font*)))
 
 
 (-> window-line-y (integer) integer)
@@ -189,7 +189,7 @@
 
 The box sits at the right end of the title bar. Returns three NILs
 when the window is too narrow to carry one."
-  (let* ((size (bitmap-font-height *fixed-font*))
+  (let* ((size (font-height *fixed-font*))
          (box-x (- (window-width window) size 3))
          (box-y (+ 1 (floor (- *window-title-bar-height* size) 2))))
     (if (plusp box-x)
