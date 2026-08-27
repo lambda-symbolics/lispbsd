@@ -31,6 +31,7 @@
                              (:file "presentation")
                              (:file "bitmap-io")
                              (:file "event")
+                             (:file "journal")
                              (:file "authority")
                              (:file "runtime")
                              (:file "runtime-sbcl")

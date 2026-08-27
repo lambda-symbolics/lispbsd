@@ -192,6 +192,22 @@
    #:event-log
    #:event-log-events
    #:make-event-log
+   ;; Journal
+   #:invalid-journal-record
+   #:journal
+   #:journal-append
+   #:journal-durable-p
+   #:journal-error
+   #:journal-mark-durable
+   #:journal-path
+   #:journal-record
+   #:journal-record-id
+   #:journal-record-kind
+   #:journal-record-payload
+   #:journal-record-timestamp
+   #:journal-records
+   #:make-journal
+   #:unwritable-journal-record
    ;; Authority
    #:authority
    #:authority-delegable-p

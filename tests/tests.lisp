@@ -771,6 +771,56 @@
                  "the window border composes under truetype metrics")))
 
 
+(-> test-journal () t)
+(defun test-journal ()
+  "The mutation journal appends, reads back, marks durable, and survives crashes."
+  (let* ((path (merge-pathnames (format nil "lispbsd-journal-~A.lisp"
+                                        (make-object-id))
+                                (uiop:temporary-directory)))
+         (journal (make-journal :path path)))
+    (unwind-protect
+         (progn
+           (multiple-value-bind (records truncated-p) (journal-records journal)
+             (test-assert (null records))
+             (test-assert (not truncated-p)))
+           (let ((record (journal-append journal ':definition-mutation
+                                         (list ':name 'frobnicate
+                                               ':form '(defun frobnicate () 42)))))
+             (journal-append journal ':checkpoint (list ':note "before rewrite"))
+             (multiple-value-bind (records truncated-p) (journal-records journal)
+               (test-assert (= 2 (length records)))
+               (test-assert (not truncated-p))
+               (test-assert (eq ':definition-mutation
+                                (journal-record-kind (first records))))
+               (test-assert (equal '(defun frobnicate () 42)
+                                   (getf (journal-record-payload (first records))
+                                         ':form)))
+               (test-assert (string= (journal-record-id record)
+                                     (journal-record-id (first records)))))
+             (test-assert (not (journal-durable-p journal
+                                                  (journal-record-id record))))
+             (journal-mark-durable journal (journal-record-id record))
+             (test-assert (journal-durable-p journal (journal-record-id record))))
+           (with-open-file (stream path :direction ':output
+                                        :if-exists ':append)
+             (write-string "(:id \"deadbeef\" :timestamp 12" stream))
+           (multiple-value-bind (records truncated-p) (journal-records journal)
+             (test-assert (= 3 (length records))
+                          "a crashed final form leaves earlier records readable")
+             (test-assert truncated-p "the truncated tail is reported"))
+           (handler-case
+               (progn
+                 (journal-append journal ':bad (list (make-bitmap 1 1)))
+                 (test-assert nil "unprintable payloads should be rejected"))
+             (unwritable-journal-record ()
+               (test-assert t)))
+           (multiple-value-bind (records truncated-p) (journal-records journal)
+             (declare (ignore truncated-p))
+             (test-assert (= 3 (length records))
+                          "a rejected payload writes nothing")))
+      (ignore-errors (delete-file path)))))
+
+
 (-> run-tests () t)
 (defun run-tests ()
   "Run the LispBSD test suite and signal an error on failure."
@@ -780,6 +830,7 @@
   (test-hosted-world)
   (test-authority)
   (test-generation-roundtrip)
+  (test-journal)
   (test-activity-mailbox)
   (test-activity-failure)
   (test-exec)

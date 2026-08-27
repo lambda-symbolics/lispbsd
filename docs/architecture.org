@@ -37,6 +37,7 @@ The running system has five components with explicit interfaces:
 | =src/presentation.lisp= | Presentations tying window output to live objects |
 | =src/bitmap-io.lisp= | PBM bitmap files and desktop screenshots |
 | =src/event.lisp= | Structured event log |
+| =src/journal.lisp= | Append-only mutation journal of readable forms |
 | =src/authority.lisp= | Capability grants |
 | =src/runtime.lisp= | Runtime protocol |
 | =src/runtime-sbcl.lisp= | SBCL adapter |
