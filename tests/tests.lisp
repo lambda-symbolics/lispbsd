@@ -1342,6 +1342,51 @@
                    "a pointer press selects the event under it"))))
 
 
+(-> test-checkpoint () t)
+(defun test-checkpoint ()
+  "Checkpoints retain generations in a registry readable without a world."
+  (let* ((directory (merge-pathnames
+                     (format nil "lispbsd-store-~A/" (make-object-id))
+                     (uiop:temporary-directory)))
+         (store (make-generation-store :directory directory))
+         (world (make-hosted-world :name "checkpoint-world")))
+    (unwind-protect
+         (progn
+           (test-assert (null (generation-store-generations store)))
+           (let* ((before (world-generation world))
+                  (first-generation (world-checkpoint world store
+                                                      :note "first"))
+                  (second-generation (world-checkpoint world store)))
+             (test-assert (equal (generation-id before)
+                                 (generation-parent-id first-generation))
+                          "the first checkpoint descends from the start")
+             (test-assert (equal (generation-id first-generation)
+                                 (generation-parent-id second-generation))
+                          "checkpoints chain into a lineage")
+             (test-assert (eq second-generation (world-generation world)))
+             (let ((listed (generation-store-generations store)))
+               (test-assert (= 2 (length listed)))
+               (test-assert (equal (generation-id first-generation)
+                                   (generation-id (first listed)))
+                            "the registry lists oldest first"))
+             (test-assert (equal (generation-id first-generation)
+                                 (generation-id
+                                  (generation-store-find
+                                   store (generation-id first-generation)))))
+             (test-assert (null (generation-store-find
+                                 store (make-object-id))))
+             (let ((read-back (generation-read
+                               (generation-store-manifest-path
+                                store (generation-id first-generation)))))
+               (test-assert (equal (generation-world-id read-back)
+                                   (world-id world))
+                            "manifests round-trip through the store"))
+             (test-assert (find ':world-checkpointed (world-events world)
+                                :key #'event-kind))))
+      (world-shutdown world)
+      (ignore-errors (uiop:delete-directory-tree directory :validate t)))))
+
+
 (-> run-tests () t)
 (defun run-tests ()
   "Run the LispBSD test suite and signal an error on failure."
@@ -1351,6 +1396,7 @@
   (test-hosted-world)
   (test-authority)
   (test-generation-roundtrip)
+  (test-checkpoint)
   (test-journal)
   (test-world-mutation)
   (test-network-control)

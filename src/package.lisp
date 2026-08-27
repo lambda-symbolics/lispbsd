@@ -363,6 +363,15 @@
    #:generation-world-id
    #:generation-write
    #:make-generation
+   ;; Checkpoint
+   #:generation-store
+   #:generation-store-directory
+   #:generation-store-find
+   #:generation-store-generations
+   #:generation-store-manifest-path
+   #:generation-store-record
+   #:make-generation-store
+   #:world-checkpoint
    ;; World
    #:*world*
    #:make-hosted-world

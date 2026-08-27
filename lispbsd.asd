@@ -45,6 +45,7 @@
                              (:file "generation")
                              (:file "world")
                              (:file "mutation")
+                             (:file "checkpoint")
                              (:file "definition")
                              (:file "inspector")
                              (:file "exec")

@@ -51,6 +51,7 @@ The running system has five components with explicit interfaces:
 | =src/generation.lisp= | Generation metadata |
 | =src/world.lisp= | Live world and startup phases |
 | =src/mutation.lisp= | Durable definition mutations and journal replay |
+| =src/checkpoint.lisp= | Generation store, registry, and world checkpoints |
 | =src/definition.lisp= | Definition browser |
 | =src/inspector.lisp= | Generic inspector |
 | =src/exec.lisp= | Lisp Exec |
