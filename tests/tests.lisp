@@ -821,6 +821,63 @@
       (ignore-errors (delete-file path)))))
 
 
+(-> test-world-mutation () t)
+(defun test-world-mutation ()
+  "Durable mutations journal, install, mark durable, and replay."
+  (let* ((path (merge-pathnames (format nil "lispbsd-mutation-~A.lisp"
+                                        (make-object-id))
+                                (uiop:temporary-directory)))
+         (world (make-hosted-world :name "mutation-world"
+                                   :journal-path path)))
+    (unwind-protect
+         (progn
+           (test-assert (typep (world-journal world) 'journal))
+           (let ((record (world-mutate-definition
+                          world
+                          '(defun lispbsd-test-frob () 41)
+                          :note "first")))
+             (test-assert (journal-durable-p (world-journal world)
+                                             (journal-record-id record)))
+             (test-assert (= 41 (funcall (symbol-function 'lispbsd-test-frob))))
+             (test-assert (find ':definition-mutated (world-events world)
+                                :key #'event-kind))
+             (test-assert (equal (journal-record-id record)
+                                 (generation-mutation-head
+                                  (world-generation world)))
+                          "the new generation heads the mutation lineage"))
+           (handler-case
+               (progn
+                 (world-mutate-definition world
+                                          '(defun lispbsd-test-frob () 42)
+                                          :check (lambda ()
+                                                   (error "check failed")))
+                 (test-assert nil "a failing check should signal"))
+             (world-mutation-error (condition)
+               (test-assert (world-mutation-error-record condition))
+               (test-assert (find ':definition-mutation-failed
+                                  (world-events world)
+                                  :key #'event-kind))))
+           (test-assert (= 42 (funcall (symbol-function 'lispbsd-test-frob)))
+                        "a failed check leaves the live definition installed")
+           (fmakunbound 'lispbsd-test-frob)
+           (test-assert (= 1 (world-replay-journal world))
+                        "replay reinstalls only durable mutations")
+           (test-assert (= 41 (funcall (symbol-function 'lispbsd-test-frob)))
+                        "replay restores the durable definition"))
+      (world-shutdown world)
+      (ignore-errors (delete-file path))
+      (fmakunbound 'lispbsd-test-frob)))
+  (let ((world (make-hosted-world :name "ephemeral-world")))
+    (unwind-protect
+         (handler-case
+             (progn
+               (world-mutate-definition world '(defun nope () nil))
+               (test-assert nil "ephemeral worlds should refuse mutations"))
+           (world-journal-missing ()
+             (test-assert t)))
+      (world-shutdown world))))
+
+
 (-> run-tests () t)
 (defun run-tests ()
   "Run the LispBSD test suite and signal an error on failure."
@@ -831,6 +888,7 @@
   (test-authority)
   (test-generation-roundtrip)
   (test-journal)
+  (test-world-mutation)
   (test-activity-mailbox)
   (test-activity-failure)
   (test-exec)

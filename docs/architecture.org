@@ -46,6 +46,7 @@ The running system has five components with explicit interfaces:
 | =src/activity.lisp= | Schedulable computations |
 | =src/generation.lisp= | Generation metadata |
 | =src/world.lisp= | Live world and startup phases |
+| =src/mutation.lisp= | Durable definition mutations and journal replay |
 | =src/definition.lisp= | Definition browser |
 | =src/inspector.lisp= | Generic inspector |
 | =src/exec.lisp= | Lisp Exec |

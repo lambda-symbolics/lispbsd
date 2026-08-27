@@ -277,6 +277,7 @@
    #:generation-id
    #:generation-parent-id
    #:generation-read
+   #:generation-mutation-head
    #:generation-runtime-name
    #:generation-runtime-version
    #:generation-source-revision
@@ -293,9 +294,16 @@
    #:world-generation
    #:world-history
    #:world-id
+   #:world-journal
+   #:world-journal-missing
    #:world-machine
+   #:world-mutate-definition
+   #:world-mutation-error
+   #:world-mutation-error-record
+   #:world-mutation-error-underlying
    #:world-name
    #:world-phase
+   #:world-replay-journal
    #:world-resources
    #:world-runtime
    #:world-shutdown

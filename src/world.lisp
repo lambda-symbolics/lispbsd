@@ -38,6 +38,11 @@
     :initform (make-event-log)
     :reader world-history
     :documentation "Structured event log for this world.")
+   (world-journal
+    :initarg :journal
+    :initform nil
+    :reader world-journal
+    :documentation "Durable mutation journal, or NIL for an ephemeral world.")
    (world-authority-root
     :initarg :authority-root
     :initform (make-authority-set)
@@ -151,13 +156,21 @@
   world)
 
 
-(-> make-hosted-world (&key (:name string)) world)
-(defun make-hosted-world (&key (name "hosted"))
-  "Create and start a hosted world on this Common Lisp image."
+(-> make-hosted-world (&key (:name string)
+                           (:journal-path (option (or pathname string))))
+    world)
+(defun make-hosted-world (&key (name "hosted") journal-path)
+  "Create and start a hosted world on this Common Lisp image.
+
+When JOURNAL-PATH is supplied, the world keeps a durable mutation
+journal there; without it the world is ephemeral and refuses durable
+mutations."
   (let* ((runtime (make-sbcl-runtime))
          (world (make-instance 'world
                                :name name
-                               :runtime runtime)))
+                               :runtime runtime
+                               :journal (and journal-path
+                                             (make-journal :path journal-path)))))
     (world-start world)
     (setf *world* world)
     world))

@@ -41,22 +41,31 @@
     :initform nil
     :reader generation-source-revision
     :type (option string)
-    :documentation "Tracked source revision, if known."))
+    :documentation "Tracked source revision, if known.")
+   (generation-mutation-head
+    :initarg :mutation-head
+    :initform nil
+    :reader generation-mutation-head
+    :type (option object-id)
+    :documentation "Journal record heading the mutation lineage, if any."))
   (:documentation
    "Named checkpoint metadata for a world, sufficient to validate it."))
 
 
 (-> make-generation (object-id runtime &key (:parent-id (option object-id))
-                                           (:source-revision (option string)))
+                                           (:source-revision (option string))
+                                           (:mutation-head (option object-id)))
     generation)
-(defun make-generation (world-id runtime &key parent-id source-revision)
+(defun make-generation (world-id runtime &key parent-id source-revision
+                        mutation-head)
   "Return generation metadata for WORLD-ID on RUNTIME."
   (make-instance 'generation
                  :world-id world-id
                  :runtime-name (runtime-name runtime)
                  :runtime-version (runtime-version runtime)
                  :parent-id parent-id
-                 :source-revision source-revision))
+                 :source-revision source-revision
+                 :mutation-head mutation-head))
 
 
 (-> generation--plist (generation) list)
@@ -68,7 +77,8 @@
         :parent-id (generation-parent-id generation)
         :runtime-name (generation-runtime-name generation)
         :runtime-version (generation-runtime-version generation)
-        :source-revision (generation-source-revision generation)))
+        :source-revision (generation-source-revision generation)
+        :mutation-head (generation-mutation-head generation)))
 
 
 (-> generation--from-plist (list) generation)
@@ -86,7 +96,8 @@
                  :parent-id (getf plist :parent-id)
                  :runtime-name (getf plist :runtime-name)
                  :runtime-version (getf plist :runtime-version)
-                 :source-revision (getf plist :source-revision)))
+                 :source-revision (getf plist :source-revision)
+                 :mutation-head (getf plist :mutation-head)))
 
 
 (-> generation-write (generation pathname) pathname)
