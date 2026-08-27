@@ -1195,7 +1195,7 @@
                                                         :button ':right))
     (let ((menu (desktop-menu desktop)))
       (test-assert menu "a background right press opens the system menu")
-      (test-assert (equal '(:new-exec :inspect-world)
+      (test-assert (equal '(:new-exec :inspect-world :world-events)
                           (mapcar #'menu-item-value (menu-items menu)))))
     (desktop-dispatch-event desktop (make-pointer-event :x 200 :y 200
                                                         :action ':release
@@ -1289,6 +1289,59 @@
                  "choosing Close detaches the window")))
 
 
+(-> test-event-window () t)
+(defun test-event-window ()
+  "The event browser lists, selects, and inspects world events."
+  (let* ((*system-font* *fixed-font*)
+         (log (make-event-log))
+         (desktop (make-desktop :width 400 :height 300)))
+    (emit-event log ':first :source 'alpha)
+    (emit-event log ':second :source 'beta)
+    (emit-event log ':third :source 'gamma)
+    (let* ((event-window (make-event-window :log log
+                                            :world nil
+                                            :x 4 :y 4
+                                            :width 200 :height 100))
+           (window (event-window-window event-window)))
+      (desktop-attach-window desktop window)
+      (test-assert (eq event-window (window-application window)))
+      (test-assert (= 0 (event-window-selection event-window)))
+      (test-assert (eq ':first
+                       (event-kind
+                        (event-window-selected-event event-window))))
+      (desktop-dispatch-event desktop (make-key-event :key ':down))
+      (test-assert (eq ':second
+                       (event-kind
+                        (event-window-selected-event event-window))))
+      (desktop-dispatch-event desktop (make-key-event :key ':down))
+      (desktop-dispatch-event desktop (make-key-event :key ':down))
+      (test-assert (eq ':third
+                       (event-kind
+                        (event-window-selected-event event-window)))
+                   "selection clamps at the newest event")
+      (test-assert (find ':event (window-presentations window)
+                         :key #'presentation-type)
+                   "event lines are presented")
+      (desktop-dispatch-event desktop (make-key-event :key ':return))
+      (test-assert (= 2 (length (desktop-windows desktop)))
+                   "return opens an inspector on the event")
+      (let ((application (window-application (desktop-focus desktop))))
+        (test-assert (typep application 'inspector-window))
+        (test-assert (eq ':third
+                         (event-kind
+                          (inspector-window-object application)))))
+      (desktop-dispatch-event desktop (make-pointer-event :x 10 :y 29
+                                                          :action ':press
+                                                          :button ':left))
+      (desktop-dispatch-event desktop (make-pointer-event :x 10 :y 29
+                                                          :action ':release
+                                                          :button ':left))
+      (test-assert (eq ':second
+                       (event-kind
+                        (event-window-selected-event event-window)))
+                   "a pointer press selects the event under it"))))
+
+
 (-> run-tests () t)
 (defun run-tests ()
   "Run the LispBSD test suite and signal an error on failure."
@@ -1318,6 +1371,7 @@
   (test-bitmap-io)
   (test-exec-window)
   (test-inspector-window)
+  (test-event-window)
   (test-presentation)
   (test-exec-inspect)
   (test-menu)

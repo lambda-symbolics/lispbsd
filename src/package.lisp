@@ -411,6 +411,16 @@
    #:exec-window-repaint
    #:exec-window-window
    #:make-exec-window
+   ;; Event window
+   #:event-window
+   #:event-window-handle-event
+   #:event-window-inspect
+   #:event-window-log
+   #:event-window-repaint
+   #:event-window-selected-event
+   #:event-window-selection
+   #:event-window-window
+   #:make-event-window
    ;; Inspector window
    #:inspector-window
    #:inspector-window-ascend
