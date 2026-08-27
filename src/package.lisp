@@ -28,6 +28,10 @@
    #:bitmap-error
    #:invalid-bitmap-size
    #:unknown-raster-operation
+   #:invalid-window-geometry
+   #:window-already-attached
+   #:window-error
+   #:window-not-attached
    ;; Bitmap
    #:bitmap
    #:bitmap-ascii
@@ -62,6 +66,36 @@
    #:make-bitmap-font
    #:make-fixed-font
    #:make-missing-glyph
+   ;; Windows and desktop
+   #:*window-title-bar-height*
+   #:desktop
+   #:desktop-attach-window
+   #:desktop-compose
+   #:desktop-detach-window
+   #:desktop-focus
+   #:desktop-focus-window
+   #:desktop-id
+   #:desktop-screen
+   #:desktop-window-at
+   #:desktop-windows
+   #:make-desktop
+   #:make-window
+   #:window
+   #:window-contains-point-p
+   #:window-content-bitmap
+   #:window-desktop
+   #:window-height
+   #:window-hide
+   #:window-id
+   #:window-lower
+   #:window-move
+   #:window-raise
+   #:window-show
+   #:window-title
+   #:window-visible-p
+   #:window-width
+   #:window-x
+   #:window-y
    ;; Event
    #:emit-event
    #:event

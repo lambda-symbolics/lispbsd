@@ -280,6 +280,67 @@
       (test-assert (= 0 (bitmap-pixel missing 1 1))))))
 
 
+(-> test-window () t)
+(defun test-window ()
+  "Windows stack, take focus, hit test, and compose onto the screen."
+  (let* ((desktop (make-desktop :width 32 :height 32))
+         (bottom  (make-window :title "b" :x 2 :y 2 :width 20 :height 16))
+         (top     (make-window :title "t" :x 8 :y 6 :width 20 :height 16)))
+    (desktop-attach-window desktop bottom)
+    (desktop-attach-window desktop top)
+    (test-assert (equal (list bottom top) (desktop-windows desktop)))
+    (test-assert (eq (desktop-focus desktop) top))
+    (test-assert (eq top (desktop-window-at desktop 10 8)))
+    (test-assert (eq bottom (desktop-window-at desktop 3 3)))
+    (test-assert (null (desktop-window-at desktop 0 31)))
+    (window-raise bottom)
+    (test-assert (eq bottom (desktop-window-at desktop 10 8)))
+    (window-lower bottom)
+    (test-assert (equal (list bottom top) (desktop-windows desktop)))
+    (window-hide top)
+    (test-assert (eq (desktop-focus desktop) bottom))
+    (test-assert (eq bottom (desktop-window-at desktop 10 8)))
+    (bitmap-fill (window-content-bitmap bottom) :bit 1)
+    (let ((screen (desktop-compose desktop)))
+      (test-assert (= 1 (bitmap-pixel screen 0 0)) "stipple ink at origin")
+      (test-assert (= 0 (bitmap-pixel screen 1 0)) "stipple paper beside origin")
+      (test-assert (= 1 (bitmap-pixel screen 2 2)) "window border corner")
+      (test-assert (= 1 (bitmap-pixel screen 21 17)) "window border far corner")
+      (test-assert (= 1 (bitmap-pixel screen 19 4)) "focused title bar is ink")
+      (test-assert (= 1 (bitmap-pixel screen 5 13)) "title separator line")
+      (test-assert (= 1 (bitmap-pixel screen 3 14)) "content pixel is ink"))
+    (window-show top)
+    (let ((screen (desktop-compose desktop)))
+      (test-assert (= 1 (bitmap-pixel screen 8 6)) "top window border corner")
+      (test-assert (= 0 (bitmap-pixel screen 25 8)) "unfocused title bar is paper"))
+    (desktop-focus-window desktop top)
+    (test-assert (eq (desktop-focus desktop) top))
+    (window-move bottom :x 4)
+    (test-assert (= 4 (window-x bottom)))
+    (test-assert (= 2 (window-y bottom)))
+    (desktop-detach-window desktop top)
+    (test-assert (null (window-desktop top)))
+    (test-assert (eq (desktop-focus desktop) bottom))
+    (handler-case
+        (progn
+          (window-raise top)
+          (test-assert nil "window-raise should require attachment"))
+      (window-not-attached ()
+        (test-assert t)))
+    (handler-case
+        (progn
+          (desktop-attach-window desktop bottom)
+          (test-assert nil "attach should reject an attached window"))
+      (window-already-attached ()
+        (test-assert t))))
+  (handler-case
+      (progn
+        (make-window :width 10 :height 12)
+        (test-assert nil "make-window should reject too-small geometry"))
+    (invalid-window-geometry ()
+      (test-assert t))))
+
+
 (-> run-tests () t)
 (defun run-tests ()
   "Run the LispBSD test suite and signal an error on failure."
@@ -296,6 +357,7 @@
   (test-runtime-identity)
   (test-bitmap)
   (test-font)
+  (test-window)
   (if *test-failures*
       (error "~D assertion~:P failed of ~D:~%~{  ~A~%~}"
              (length *test-failures*)

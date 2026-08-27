@@ -12,6 +12,7 @@
                              (:file "conditions")
                              (:file "bitmap")
                              (:file "font")
+                             (:file "window")
                              (:file "event")
                              (:file "authority")
                              (:file "runtime")
