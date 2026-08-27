@@ -1631,6 +1631,62 @@
         (world-shutdown world)))))
 
 
+(-> test-desktop-session () t)
+(defun test-desktop-session ()
+  "A desktop session polls injected input and presents frames."
+  (labels ((await (predicate)
+             (loop repeat 300
+                   do (when (funcall predicate)
+                        (return t))
+                      (sleep 0.02))))
+    (let* ((*system-font* *fixed-font*)
+           (world (make-hosted-world :name "session-world"))
+           (backend (make-headless-backend :width 320 :height 200))
+           (session (start-desktop-session :backend backend
+                                           :world world
+                                           :interval 1/100)))
+      (unwind-protect
+           (let ((desktop (desktop-session-desktop session)))
+             (test-assert (await (lambda ()
+                                   (plusp (headless-backend-frame-count
+                                           backend))))
+                          "the session presents frames")
+             (test-assert (= 320 (bitmap-width
+                                  (headless-backend-frame backend))))
+             (headless-backend-inject backend
+                                      (make-pointer-event :x 100 :y 100
+                                                          :action ':press
+                                                          :button ':right))
+             (test-assert (await (lambda () (desktop-menu desktop)))
+                          "injected input opens the system menu")
+             (headless-backend-inject backend (make-key-event :key ':return))
+             (test-assert (await (lambda ()
+                                   (plusp (length
+                                           (desktop-windows desktop)))))
+                          "choosing New Exec attaches a window")
+             (test-assert (typep (window-application
+                                  (first (desktop-windows desktop)))
+                                 'exec-window))
+             (let ((count (headless-backend-frame-count backend)))
+               (test-assert (await (lambda ()
+                                     (> (headless-backend-frame-count backend)
+                                        count)))
+                            "frames keep flowing"))
+             (let ((frame (headless-backend-frame backend)))
+               (test-assert (loop for y from 0 below (bitmap-height frame)
+                                    thereis (loop for x from 0
+                                                    below (bitmap-width frame)
+                                                  thereis (plusp
+                                                           (bitmap-pixel
+                                                            frame x y))))
+                            "presented frames show the desktop")))
+        (stop-desktop-session session)
+        (world-shutdown world))
+      (test-assert (eq (activity-state (desktop-session-activity session))
+                       ':stopped)
+                   "the session loop stops cleanly"))))
+
+
 (-> run-tests () t)
 (defun run-tests ()
   "Run the LispBSD test suite and signal an error on failure."
@@ -1652,6 +1708,7 @@
   (test-activity-failure)
   (test-supervision)
   (test-break-window)
+  (test-desktop-session)
   (test-exec)
   (test-inspector-and-definitions)
   (test-runtime-identity)

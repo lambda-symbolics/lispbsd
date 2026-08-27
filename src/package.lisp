@@ -437,6 +437,21 @@
    #:definition-source-location
    #:find-definition
    #:list-definitions
+   ;; Display backends and sessions
+   #:desktop-session
+   #:desktop-session-backend
+   #:desktop-session-desktop
+   #:display-backend-close
+   #:display-backend-poll-events
+   #:display-backend-present
+   #:display-backend-size
+   #:headless-backend
+   #:headless-backend-frame
+   #:headless-backend-frame-count
+   #:headless-backend-inject
+   #:make-headless-backend
+   #:start-desktop-session
+   #:stop-desktop-session
    ;; Inspector and Exec
    #:exec
    #:exec-evaluate
