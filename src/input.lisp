@@ -75,27 +75,38 @@
 
 A pointer press focuses, raises, and grabs the window under the
 pointer; subsequent pointer events go to the grabbed window until the
-release. Key events go to the focused window."))
+release. A press on a title bar starts a drag that moves the window
+with the pointer. Key events go to the focused window."))
 
 
 (defmethod desktop-dispatch-event ((desktop desktop) (event pointer-event))
-  (let ((window (or (desktop-pointer-grab desktop)
-                    (desktop-window-at desktop
-                                       (pointer-event-x event)
-                                       (pointer-event-y event)))))
-    (ecase (pointer-event-action event)
-      (:press
-       (when window
-         (desktop-focus-window desktop window)
-         (window-raise window)
-         (setf (desktop-pointer-grab desktop) window)))
-      (:release
-       (setf (desktop-pointer-grab desktop) nil))
-      (:move
-       nil))
-    (when window
-      (window--deliver-event window event))
-    window))
+  (let ((x (pointer-event-x event))
+        (y (pointer-event-y event)))
+    (let ((window (or (desktop-pointer-grab desktop)
+                      (desktop-window-at desktop x y))))
+      (ecase (pointer-event-action event)
+        (:press
+         (when window
+           (desktop-focus-window desktop window)
+           (window-raise window)
+           (setf (desktop-pointer-grab desktop) window)
+           (when (eq (window-region-at window x y) ':title-bar)
+             (setf (desktop-window-drag desktop)
+                   (list window
+                         (- x (window-x window))
+                         (- y (window-y window)))))))
+        (:release
+         (setf (desktop-pointer-grab desktop) nil)
+         (setf (desktop-window-drag desktop) nil))
+        (:move
+         (let ((drag (desktop-window-drag desktop)))
+           (when drag
+             (window-move (first drag)
+                          :x (- x (second drag))
+                          :y (- y (third drag)))))))
+      (when window
+        (window--deliver-event window event))
+      window)))
 
 
 (defmethod desktop-dispatch-event ((desktop desktop) (event key-event))

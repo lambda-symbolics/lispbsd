@@ -125,7 +125,11 @@
    (desktop-pointer-grab
     :initform nil
     :accessor desktop-pointer-grab
-    :documentation "The window receiving all pointer events during a press, or NIL."))
+    :documentation "The window receiving all pointer events during a press, or NIL.")
+   (desktop-window-drag
+    :initform nil
+    :accessor desktop-window-drag
+    :documentation "Active title-bar drag as (window offset-x offset-y), or NIL."))
   (:documentation
    "A monochrome desktop owning window stacking, focus, and composition."))
 

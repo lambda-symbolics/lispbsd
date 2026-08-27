@@ -82,6 +82,7 @@
    #:desktop-screen
    #:desktop-screenshot
    #:desktop-window-at
+   #:desktop-window-drag
    #:desktop-windows
    #:make-desktop
    #:make-window

@@ -358,7 +358,7 @@
                                 :event-handler handler)))
     (desktop-attach-window desktop bottom)
     (desktop-attach-window desktop top)
-    (let ((press (make-pointer-event :x 3 :y 3 :action ':press :button ':left)))
+    (let ((press (make-pointer-event :x 5 :y 15 :action ':press :button ':left)))
       (test-assert (eq bottom (desktop-dispatch-event desktop press)))
       (test-assert (eq (desktop-focus desktop) bottom))
       (test-assert (eq (desktop-pointer-grab desktop) bottom))
@@ -394,7 +394,32 @@
     (multiple-value-bind (content-x content-y)
         (window-point->content bottom 5 5)
       (test-assert (null content-x))
-      (test-assert (null content-y))))
+      (test-assert (null content-y)))
+    (desktop-dispatch-event desktop (make-pointer-event :x 3 :y 3
+                                                        :action ':press
+                                                        :button ':left))
+    (test-assert (equal (list bottom 1 1) (desktop-window-drag desktop))
+                 "a title bar press starts a drag")
+    (desktop-dispatch-event desktop (make-pointer-event :x 10 :y 9
+                                                        :action ':move))
+    (test-assert (= 9 (window-x bottom)))
+    (test-assert (= 8 (window-y bottom)))
+    (desktop-dispatch-event desktop (make-pointer-event :x 10 :y 9
+                                                        :action ':release
+                                                        :button ':left))
+    (test-assert (null (desktop-window-drag desktop)))
+    (desktop-dispatch-event desktop (make-pointer-event :x 20 :y 20
+                                                        :action ':move))
+    (test-assert (= 9 (window-x bottom))
+                 "motion after the release no longer drags")
+    (desktop-dispatch-event desktop (make-pointer-event :x 12 :y 22
+                                                        :action ':press
+                                                        :button ':left))
+    (test-assert (null (desktop-window-drag desktop))
+                 "a content press does not start a drag")
+    (desktop-dispatch-event desktop (make-pointer-event :x 12 :y 22
+                                                        :action ':release
+                                                        :button ':left)))
   (let ((desktop (make-desktop :width 8 :height 8)))
     (test-assert (null (desktop-dispatch-event desktop
                                                (make-key-event :key ':a)))
