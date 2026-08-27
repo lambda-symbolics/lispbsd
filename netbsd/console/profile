@@ -1,6 +1,8 @@
 # LispBSD: the login shell is SBCL with the live world loaded.
 # Single user leaves root read-only; keep a plain shell for recovery.
-if [ -w / ]; then
+# A write probe is used because test -w is always true for root.
+if touch /.lispbsd-writable 2>/dev/null; then
+    rm -f /.lispbsd-writable
     exec /usr/pkg/bin/sbcl --noinform --no-sysinit --no-userinit \
         --load /lispbsd/boot.lisp \
         --eval '(in-package #:lispbsd)'
