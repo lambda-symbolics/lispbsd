@@ -9,6 +9,9 @@
 (defparameter *guest-prompt* "LISPBSD# "
   "Prompt installed after login so command output can be framed.")
 
+(defparameter *guest-serial-log* nil
+  "Stream receiving a raw copy of everything read from the serial console.")
+
 (defparameter *debugger-prompt*
   (format nil "~%0] ")
   "SBCL debugger prompt, newline-anchored so kernel timestamps do not match.")
@@ -108,7 +111,11 @@
             for character = (read-char-no-hang stream nil nil)
             while character
             collect character into characters
-            finally (return (coerce characters 'string))))))
+            finally (let ((chunk (coerce characters 'string)))
+                      (when *guest-serial-log*
+                        (write-string chunk *guest-serial-log*)
+                        (force-output *guest-serial-log*))
+                      (return chunk))))))
 
 (defun guest-wait-for-any (stream patterns timeout)
   "Accumulate STREAM output until one of PATTERNS appears."
@@ -180,10 +187,10 @@
                :unix))))
       (t
        (guest-send stream "root")
-       (let ((after (guest-wait-for-any stream (list "Password:" "# " "$ " "* " *debugger-prompt*) 30)))
+       (let ((after (guest-wait-for-any stream (list "Password:" "# " "$ " "* " *debugger-prompt*) 600)))
          (when (search "Password:" after)
            (guest-send stream "")
-           (setf after (guest-wait-for-any stream (list "# " "$ " "* " *debugger-prompt*) 30)))
+           (setf after (guest-wait-for-any stream (list "# " "$ " "* " *debugger-prompt*) 600)))
          (cond
            ((guest-lisp-prompt-p after)
             :lisp)
@@ -245,24 +252,29 @@
          (stream nil))
     (unless (probe-file image)
       (error 'guest-error :message (format nil "missing image ~A" image)))
-    (unwind-protect
-         (progn
-           (setf process (guest-start-qemu image kernel memory host port))
-           (setf stream (guest-open-serial host port))
-           (let* ((console (guest-login stream))
-                  (output (guest-run-command stream command
-                                             :timeout 600
-                                             :console console)))
-             (write-string output)
-             (terpri)
-             (guest-shutdown stream process :console console)
-             (setf process nil)
-             output))
-      (when stream
-        (ignore-errors (close stream)))
-      (when (and process (uiop:process-alive-p process))
-        (uiop:terminate-process process :urgent t)
-        (ignore-errors (uiop:wait-process process))))))
+    (with-open-file (*guest-serial-log* (merge-pathnames "vm/guest-serial.log"
+                                                         root)
+                                        :direction :output
+                                        :if-exists :supersede
+                                        :if-does-not-exist :create)
+      (unwind-protect
+           (progn
+             (setf process (guest-start-qemu image kernel memory host port))
+             (setf stream (guest-open-serial host port))
+             (let* ((console (guest-login stream))
+                    (output (guest-run-command stream command
+                                               :timeout 600
+                                               :console console)))
+               (write-string output)
+               (terpri)
+               (guest-shutdown stream process :console console)
+               (setf process nil)
+               output))
+        (when stream
+          (ignore-errors (close stream)))
+        (when (and process (uiop:process-alive-p process))
+          (uiop:terminate-process process :urgent t)
+          (ignore-errors (uiop:wait-process process)))))))
 
 (handler-case
     (guest-main)
