@@ -1,4 +1,7 @@
 # LispBSD: the login shell is SBCL with the live world loaded.
-exec /usr/pkg/bin/sbcl --noinform --no-sysinit --no-userinit \
-    --load /lispbsd/boot.lisp \
-    --eval '(in-package #:lispbsd)'
+# Single user leaves root read-only; keep a plain shell for recovery.
+if [ -w / ]; then
+    exec /usr/pkg/bin/sbcl --noinform --no-sysinit --no-userinit \
+        --load /lispbsd/boot.lisp \
+        --eval '(in-package #:lispbsd)'
+fi
