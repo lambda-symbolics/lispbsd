@@ -188,7 +188,9 @@ the handler chooses ':retry or ':abort."
 
 (-> stop-activity (activity) activity)
 (defun stop-activity (activity)
-  "Request ACTIVITY to stop and return ACTIVITY."
+  "Request a live ACTIVITY to stop and return ACTIVITY.
+
+An activity that already finished is left in its final state."
   (let ((thread (activity-thread activity))
         (world (activity-world activity)))
     (when (and thread (thread-alive-p thread))
@@ -197,12 +199,12 @@ the handler chooses ':retry or ':abort."
          runtime
          thread
          (lambda ()
-           (error 'activity-stopped :activity activity)))))
-    (activity--set-state activity ':quiescing)
-    (when world
-      (emit-event (world-history world)
-                  ':activity-stop-requested
-                  :source activity)))
+           (error 'activity-stopped :activity activity))))
+      (activity--set-state activity ':quiescing)
+      (when world
+        (emit-event (world-history world)
+                    ':activity-stop-requested
+                    :source activity))))
   activity)
 
 
