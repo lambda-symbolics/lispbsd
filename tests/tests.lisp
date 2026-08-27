@@ -341,6 +341,62 @@
       (test-assert t))))
 
 
+(-> test-input () t)
+(defun test-input ()
+  "Pointer and key events route through focus, stacking, and grabs."
+  (let* ((desktop  (make-desktop :width 32 :height 32))
+         (received nil)
+         (handler  (lambda (window event)
+                     (push (list window event) received)))
+         (bottom   (make-window :title "b" :x 2 :y 2 :width 20 :height 16
+                                :event-handler handler))
+         (top      (make-window :title "t" :x 8 :y 6 :width 20 :height 16
+                                :event-handler handler)))
+    (desktop-attach-window desktop bottom)
+    (desktop-attach-window desktop top)
+    (let ((press (make-pointer-event :x 3 :y 3 :action ':press :button ':left)))
+      (test-assert (eq bottom (desktop-dispatch-event desktop press)))
+      (test-assert (eq (desktop-focus desktop) bottom))
+      (test-assert (eq (desktop-pointer-grab desktop) bottom))
+      (test-assert (equal (list top bottom) (desktop-windows desktop)))
+      (test-assert (eq (first (first received)) bottom)))
+    (let ((move (make-pointer-event :x 25 :y 20 :action ':move)))
+      (test-assert (eq bottom (desktop-dispatch-event desktop move))
+                   "grab should win over the window under the pointer"))
+    (let ((release (make-pointer-event :x 25 :y 20 :action ':release
+                                       :button ':left)))
+      (test-assert (eq bottom (desktop-dispatch-event desktop release)))
+      (test-assert (null (desktop-pointer-grab desktop))))
+    (let ((move (make-pointer-event :x 25 :y 20 :action ':move)))
+      (test-assert (eq top (desktop-dispatch-event desktop move))
+                   "after release, motion routes by position"))
+    (let ((key (make-key-event :key ':a :character #\a)))
+      (test-assert (eq bottom (desktop-dispatch-event desktop key))
+                   "key events go to the focused window"))
+    (test-assert (= 5 (length received)))
+    (setf received nil)
+    (let ((press (make-pointer-event :x 0 :y 31 :action ':press :button ':left)))
+      (test-assert (null (desktop-dispatch-event desktop press)))
+      (test-assert (null received))
+      (test-assert (null (desktop-pointer-grab desktop))))
+    (test-assert (eq ':border (window-region-at bottom 2 2)))
+    (test-assert (eq ':title-bar (window-region-at bottom 5 5)))
+    (test-assert (eq ':content (window-region-at bottom 5 15)))
+    (test-assert (null (window-region-at bottom 0 0)))
+    (multiple-value-bind (content-x content-y)
+        (window-point->content bottom 5 15)
+      (test-assert (= 2 content-x))
+      (test-assert (= 1 content-y)))
+    (multiple-value-bind (content-x content-y)
+        (window-point->content bottom 5 5)
+      (test-assert (null content-x))
+      (test-assert (null content-y))))
+  (let ((desktop (make-desktop :width 8 :height 8)))
+    (test-assert (null (desktop-dispatch-event desktop
+                                               (make-key-event :key ':a)))
+                 "key events with no focused window go nowhere")))
+
+
 (-> run-tests () t)
 (defun run-tests ()
   "Run the LispBSD test suite and signal an error on failure."
@@ -358,6 +414,7 @@
   (test-bitmap)
   (test-font)
   (test-window)
+  (test-input)
   (if *test-failures*
       (error "~D assertion~:P failed of ~D:~%~{  ~A~%~}"
              (length *test-failures*)

@@ -13,6 +13,7 @@
                              (:file "bitmap")
                              (:file "font")
                              (:file "window")
+                             (:file "input")
                              (:file "event")
                              (:file "authority")
                              (:file "runtime")

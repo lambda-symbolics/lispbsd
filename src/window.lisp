@@ -7,6 +7,11 @@
   "Pixel height of a window title bar, excluding its separator line.")
 
 
+(deftype window-region ()
+  "A semantic region of a window's exterior rectangle."
+  '(member :border :title-bar :content))
+
+
 (define-condition window-error (lispbsd-error)
   ((window-error-window
     :initarg :window
@@ -87,6 +92,10 @@
     :initarg :content-bitmap
     :reader window-content-bitmap
     :documentation "1-bit bitmap applications draw into.")
+   (window-event-handler
+    :initarg :event-handler
+    :accessor window-event-handler
+    :documentation "Function of (window input-event) receiving routed input, or NIL.")
    (window-desktop
     :initform nil
     :accessor window-desktop
@@ -112,7 +121,11 @@
    (desktop-focus
     :initform nil
     :accessor desktop-focus
-    :documentation "The window holding input focus, or NIL."))
+    :documentation "The window holding input focus, or NIL.")
+   (desktop-pointer-grab
+    :initform nil
+    :accessor desktop-pointer-grab
+    :documentation "The window receiving all pointer events during a press, or NIL."))
   (:documentation
    "A monochrome desktop owning window stacking, focus, and composition."))
 
@@ -130,13 +143,16 @@
 
 
 (-> make-window (&key (:title string) (:x integer) (:y integer)
-                     (:width integer) (:height integer))
+                     (:width integer) (:height integer)
+                     (:event-handler (option function)))
     window)
-(defun make-window (&key (title "Untitled") (x 0) (y 0) (width 64) (height 64))
+(defun make-window (&key (title "Untitled") (x 0) (y 0) (width 64) (height 64)
+                    event-handler)
   "Return a detached window with a fresh content bitmap.
 
 WIDTH and HEIGHT are exterior sizes; the content bitmap is smaller by
-the border, title bar, and separator line."
+the border, title bar, and separator line. EVENT-HANDLER is a function
+of (window input-event) called for input routed to the window."
   (let ((content-width (window--content-width width))
         (content-height (window--content-height height)))
     (unless (and (plusp content-width) (plusp content-height))
@@ -149,6 +165,7 @@ the border, title bar, and separator line."
                    :width width
                    :height height
                    :visible-p t
+                   :event-handler event-handler
                    :content-bitmap (make-bitmap content-width content-height))))
 
 
@@ -258,6 +275,40 @@ the border, title bar, and separator line."
        (< x (+ (window-x window) (window-width window)))
        (< y (+ (window-y window) (window-height window)))
        t))
+
+
+(-> window-region-at (window integer integer) (option window-region))
+(defun window-region-at (window x y)
+  "Return the window region under desktop point (X, Y), or NIL outside WINDOW.
+
+The border is the outermost one-pixel ring. The title bar includes its
+separator line. Everything else is content."
+  (block nil
+    (unless (window-contains-point-p window x y)
+      (return nil))
+    (let ((local-x (- x (window-x window)))
+          (local-y (- y (window-y window))))
+      (when (or (zerop local-x)
+                (zerop local-y)
+                (= local-x (1- (window-width window)))
+                (= local-y (1- (window-height window))))
+        (return ':border))
+      (if (<= local-y (1+ *window-title-bar-height*))
+          ':title-bar
+          ':content))))
+
+
+(-> window-point->content (window integer integer)
+    (values (option integer) (option integer)))
+(defun window-point->content (window x y)
+  "Translate desktop point (X, Y) into WINDOW content coordinates.
+
+Returns two values, the content X and Y, or NIL and NIL when the point
+lies outside the content region."
+  (if (eq (window-region-at window x y) ':content)
+      (values (- x (window-x window) 1)
+              (- y (window-y window) 2 *window-title-bar-height*))
+      (values nil nil)))
 
 
 (-> desktop-window-at (desktop integer integer) (option window))

@@ -75,6 +75,7 @@
    #:desktop-focus
    #:desktop-focus-window
    #:desktop-id
+   #:desktop-pointer-grab
    #:desktop-screen
    #:desktop-window-at
    #:desktop-windows
@@ -84,18 +85,41 @@
    #:window-contains-point-p
    #:window-content-bitmap
    #:window-desktop
+   #:window-event-handler
    #:window-height
    #:window-hide
    #:window-id
    #:window-lower
    #:window-move
+   #:window-point->content
    #:window-raise
+   #:window-region
+   #:window-region-at
    #:window-show
    #:window-title
    #:window-visible-p
    #:window-width
    #:window-x
    #:window-y
+   ;; Input
+   #:desktop-dispatch-event
+   #:input-event
+   #:input-event-timestamp
+   #:key-action
+   #:key-event
+   #:key-event-action
+   #:key-event-character
+   #:key-event-key
+   #:key-event-modifiers
+   #:make-key-event
+   #:make-pointer-event
+   #:pointer-action
+   #:pointer-button
+   #:pointer-event
+   #:pointer-event-action
+   #:pointer-event-button
+   #:pointer-event-x
+   #:pointer-event-y
    ;; Event
    #:emit-event
    #:event

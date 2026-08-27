@@ -32,6 +32,7 @@ The running system has five components with explicit interfaces:
 | =src/bitmap.lisp= | 1-bit bitmap, bitblt, and drawing primitives |
 | =src/font.lisp= | Bitmap fonts, text drawing, built-in 8x8 font |
 | =src/window.lisp= | Overlapping windows, desktop stacking, composition |
+| =src/input.lisp= | Pointer and key events, desktop input routing |
 | =src/event.lisp= | Structured event log |
 | =src/authority.lisp= | Capability grants |
 | =src/runtime.lisp= | Runtime protocol |
