@@ -243,5 +243,15 @@
    #:exec-world
    #:inspect-parts
    #:make-exec
+   ;; Exec window
+   #:*exec-window-print-length*
+   #:*exec-window-print-level*
+   #:exec-window
+   #:exec-window-exec
+   #:exec-window-handle-event
+   #:exec-window-input
+   #:exec-window-repaint
+   #:exec-window-window
+   #:make-exec-window
    ;; Tests
    #:run-tests))

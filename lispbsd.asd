@@ -26,7 +26,8 @@
                              (:file "world")
                              (:file "definition")
                              (:file "inspector")
-                             (:file "exec"))))
+                             (:file "exec")
+                             (:file "exec-window"))))
   :in-order-to ((test-op (test-op #:lispbsd/tests))))
 
 

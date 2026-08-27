@@ -439,6 +439,53 @@
       (ignore-errors (delete-file path)))))
 
 
+(-> test-exec-window () t)
+(defun test-exec-window ()
+  "Typing into a focused Exec window evaluates forms and renders results."
+  (let* ((desktop (make-desktop :width 160 :height 120))
+         (exec-window (make-exec-window :world nil
+                                        :package (find-package '#:lispbsd)
+                                        :title "Exec"
+                                        :x 4 :y 4 :width 120 :height 80))
+         (window (exec-window-window exec-window)))
+    (desktop-attach-window desktop window)
+    (labels ((type-string (string)
+               (loop for character across string
+                     do (desktop-dispatch-event
+                         desktop
+                         (make-key-event :key ':character
+                                         :character character))))
+
+             (press-key (key)
+               (desktop-dispatch-event desktop (make-key-event :key key))))
+      (type-string "(+ 1 2)")
+      (test-assert (string= "(+ 1 2)" (exec-window-input exec-window)))
+      (press-key ':return)
+      (test-assert (string= "" (exec-window-input exec-window)))
+      (let ((history (exec-history (exec-window-exec exec-window))))
+        (test-assert (= 1 (length history)))
+        (test-assert (equal '(3) (exec-entry-values (first history)))))
+      (let ((content (window-content-bitmap window))
+            (expected (make-bitmap 8 8)))
+        (bitmap-draw-text expected *fixed-font* "3" :x 0 :y 0)
+        (test-assert (equal (bitmap-ascii expected)
+                            (bitmap-ascii content :x 2 :y 10
+                                          :width 8 :height 8))
+                     "result line is drawn in the content bitmap"))
+      (type-string "ab")
+      (press-key ':backspace)
+      (test-assert (string= "a" (exec-window-input exec-window)))
+      (press-key ':backspace)
+      (press-key ':backspace)
+      (test-assert (string= "" (exec-window-input exec-window)))
+      (type-string "(oops")
+      (press-key ':return)
+      (let ((history (exec-history (exec-window-exec exec-window))))
+        (test-assert (= 2 (length history)))
+        (test-assert (exec-entry-condition (second history))
+                     "unreadable input is recorded, not signaled")))))
+
+
 (-> run-tests () t)
 (defun run-tests ()
   "Run the LispBSD test suite and signal an error on failure."
@@ -458,6 +505,7 @@
   (test-window)
   (test-input)
   (test-bitmap-io)
+  (test-exec-window)
   (if *test-failures*
       (error "~D assertion~:P failed of ~D:~%~{  ~A~%~}"
              (length *test-failures*)
