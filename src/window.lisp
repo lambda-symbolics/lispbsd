@@ -6,6 +6,30 @@
   (+ (bitmap-font-height *fixed-font*) 2)
   "Pixel height of a window title bar, excluding its separator line.")
 
+(defparameter *window-text-margin*
+  2
+  "Pixel margin between window content edges and drawn text.")
+
+(defparameter *window-print-length*
+  16
+  "Bound to *PRINT-LENGTH* when printing objects into window content.")
+
+(defparameter *window-print-level*
+  4
+  "Bound to *PRINT-LEVEL* when printing objects into window content.")
+
+
+(-> window-line-height () integer)
+(defun window-line-height ()
+  "Return the pixel height of one text line in window content."
+  (1+ (bitmap-font-height *fixed-font*)))
+
+
+(-> window-line-y (integer) integer)
+(defun window-line-y (index)
+  "Return the content Y coordinate of text line INDEX."
+  (+ 1 (* index (window-line-height))))
+
 
 (deftype window-region ()
   "A semantic region of a window's exterior rectangle."

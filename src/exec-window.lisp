@@ -2,15 +2,6 @@
 
 ;;;; -- Exec Window --
 
-(defparameter *exec-window-print-length*
-  16
-  "Bound to *PRINT-LENGTH* when rendering Exec transcript lines.")
-
-(defparameter *exec-window-print-level*
-  4
-  "Bound to *PRINT-LEVEL* when rendering Exec transcript lines.")
-
-
 (defclass exec-window ()
   ((exec-window-exec
     :initarg :exec
@@ -93,19 +84,20 @@ the input line."
   (let* ((window (exec-window-window exec-window))
          (content (window-content-bitmap window))
          (font *fixed-font*)
-         (line-height (1+ (bitmap-font-height font)))
          (visible-count (max 1 (floor (1- (bitmap-height content))
-                                      line-height)))
+                                      (window-line-height))))
          (lines (exec-window--lines exec-window))
          (dropped (max 0 (- (length lines) visible-count)))
          (visible (nthcdr dropped lines)))
     (bitmap-clear content)
     (loop for line in visible
           for index from 0
-          for line-y = (+ 1 (* index line-height))
-          do (bitmap-draw-text content font line :x 2 :y line-y))
-    (let ((cursor-x (+ 2 (font-text-width font (first (last visible)))))
-          (cursor-y (+ 1 (* (1- (length visible)) line-height))))
+          do (bitmap-draw-text content font line
+                               :x *window-text-margin*
+                               :y (window-line-y index)))
+    (let ((cursor-x (+ *window-text-margin*
+                       (font-text-width font (first (last visible)))))
+          (cursor-y (window-line-y (1- (length visible)))))
       (bitmap-fill content :x cursor-x
                            :y cursor-y
                            :width (bitmap-font-width font)
@@ -121,8 +113,8 @@ The final line is the input line prefixed with the prompt."
   (let ((exec (exec-window-exec exec-window))
         (lines nil))
     (let ((*package* (exec-package exec))
-          (*print-length* *exec-window-print-length*)
-          (*print-level* *exec-window-print-level*))
+          (*print-length* *window-print-length*)
+          (*print-level* *window-print-level*))
       (dolist (entry (exec-history exec))
         (push (format nil "> ~S" (exec-entry-form entry)) lines)
         (let ((condition (exec-entry-condition entry)))

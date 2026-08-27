@@ -70,7 +70,12 @@
    #:make-fixed-font
    #:make-missing-glyph
    ;; Windows and desktop
+   #:*window-print-length*
+   #:*window-print-level*
+   #:*window-text-margin*
    #:*window-title-bar-height*
+   #:window-line-height
+   #:window-line-y
    #:desktop
    #:desktop-attach-window
    #:desktop-compose
@@ -245,8 +250,6 @@
    #:inspect-parts
    #:make-exec
    ;; Exec window
-   #:*exec-window-print-length*
-   #:*exec-window-print-level*
    #:exec-window
    #:exec-window-exec
    #:exec-window-handle-event
