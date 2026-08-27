@@ -1109,6 +1109,71 @@
                  "a left press on the background opens nothing")))
 
 
+(-> test-window-resize () t)
+(defun test-window-resize ()
+  "Resizing replaces the content bitmap and repaints the application."
+  (let* ((*system-font* *fixed-font*)
+         (desktop (make-desktop :width 200 :height 200))
+         (exec-window (make-exec-window :world nil
+                                        :package (find-package '#:lispbsd)
+                                        :x 4 :y 4 :width 120 :height 80))
+         (window (exec-window-window exec-window)))
+    (desktop-attach-window desktop window)
+    (loop for character across "(+ 1 2)"
+          do (desktop-dispatch-event desktop
+                                     (make-key-event :key ':character
+                                                     :character character)))
+    (desktop-dispatch-event desktop (make-key-event :key ':return))
+    (window-resize window :width 160 :height 100)
+    (test-assert (= 160 (window-width window)))
+    (test-assert (= 100 (window-height window)))
+    (let ((content (window-content-bitmap window)))
+      (test-assert (= 158 (bitmap-width content)))
+      (test-assert (= 87 (bitmap-height content)))
+      (test-assert (= 1 (bitmap-pixel content 4 2))
+                   "the application repainted its prompt after the resize"))
+    (test-assert (window-presentations window)
+                 "repainting re-recorded the input line presentations")
+    (handler-case
+        (progn
+          (window-resize window :width 5 :height 5)
+          (test-assert nil "a too-small resize should signal"))
+      (invalid-window-geometry ()
+        (test-assert t)))))
+
+
+(-> test-window-menu () t)
+(defun test-window-menu ()
+  "A right press on a title bar offers Close and Hide."
+  (let* ((*system-font* *fixed-font*)
+         (desktop (make-desktop :width 64 :height 64))
+         (window (make-window :title "w" :x 2 :y 2 :width 40 :height 30)))
+    (desktop-attach-window desktop window)
+    (desktop-dispatch-event desktop (make-pointer-event :x 10 :y 8
+                                                        :action ':press
+                                                        :button ':right))
+    (let ((menu (desktop-menu desktop)))
+      (test-assert menu "a right press on the title bar opens the menu")
+      (test-assert (equal '(:close :hide)
+                          (mapcar #'menu-item-value (menu-items menu)))))
+    (test-assert (null (desktop-window-drag desktop))
+                 "a right press does not start a drag")
+    (desktop-dispatch-event desktop (make-pointer-event :x 10 :y 8
+                                                        :action ':release
+                                                        :button ':right))
+    (desktop-dispatch-event desktop (make-key-event :key ':down))
+    (desktop-dispatch-event desktop (make-key-event :key ':return))
+    (test-assert (not (window-visible-p window))
+                 "choosing Hide hides the window")
+    (window-show window)
+    (desktop-dispatch-event desktop (make-pointer-event :x 10 :y 8
+                                                        :action ':press
+                                                        :button ':right))
+    (desktop-dispatch-event desktop (make-key-event :key ':return))
+    (test-assert (null (desktop-windows desktop))
+                 "choosing Close detaches the window")))
+
+
 (-> run-tests () t)
 (defun run-tests ()
   "Run the LispBSD test suite and signal an error on failure."
@@ -1143,6 +1208,8 @@
   (test-system-menu)
   (test-window-shadow)
   (test-window-close-box)
+  (test-window-resize)
+  (test-window-menu)
   (if *test-failures*
       (error "~D assertion~:P failed of ~D:~%~{  ~A~%~}"
              (length *test-failures*)

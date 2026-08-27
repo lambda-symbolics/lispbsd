@@ -97,6 +97,14 @@ Key events go to the focused window."))
                   (return-from desktop-dispatch-event window))
                 (desktop-focus-window desktop window)
                 (window-raise window)
+                (when (and (eq (window-region-at window x y) ':title-bar)
+                           (eq (pointer-event-button event) ':right))
+                  (desktop-open-menu desktop
+                                     (desktop--window-menu-items desktop
+                                                                 window)
+                                     :x x
+                                     :y y)
+                  (return-from desktop-dispatch-event window))
                 (setf (desktop-pointer-grab desktop) window)
                 (when (eq (window-region-at window x y) ':title-bar)
                   (setf (desktop-window-drag desktop)
@@ -134,6 +142,19 @@ Key events go to the focused window."))
     (when window
       (window--deliver-event window event))
     window))
+
+
+(-> desktop--window-menu-items (desktop window) list)
+(defun desktop--window-menu-items (desktop window)
+  "Return the title bar context menu entries for WINDOW."
+  (list (make-menu-item :label "Close"
+                        :value ':close
+                        :action (lambda ()
+                                  (desktop-detach-window desktop window)))
+        (make-menu-item :label "Hide"
+                        :value ':hide
+                        :action (lambda ()
+                                  (window-hide window)))))
 
 
 (-> desktop--menu-pointer (desktop menu pointer-event) t)

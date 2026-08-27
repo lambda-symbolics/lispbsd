@@ -106,12 +106,12 @@
     :documentation "Exterior top edge in desktop coordinates.")
    (window-width
     :initarg :width
-    :reader window-width
+    :accessor window-width
     :type (integer 1)
     :documentation "Exterior width in pixels, including chrome.")
    (window-height
     :initarg :height
-    :reader window-height
+    :accessor window-height
     :type (integer 1)
     :documentation "Exterior height in pixels, including chrome.")
    (window-visible-p
@@ -120,7 +120,7 @@
     :documentation "True when the window participates in composition.")
    (window-content-bitmap
     :initarg :content-bitmap
-    :reader window-content-bitmap
+    :accessor window-content-bitmap
     :documentation "1-bit bitmap applications draw into.")
    (window-event-handler
     :initarg :event-handler
@@ -329,6 +329,34 @@ of (window input-event) called for input routed to the window."
   "Move WINDOW's exterior top-left corner to (X, Y)."
   (setf (window-x window) x)
   (setf (window-y window) y)
+  window)
+
+
+(defgeneric application-repaint (application)
+  (:documentation
+   "Redraw APPLICATION's window content after an external change.")
+  (:method ((application t))
+    application))
+
+
+(-> window-resize (window &key (:width integer) (:height integer)) window)
+(defun window-resize (window &key (width (window-width window))
+                             (height (window-height window)))
+  "Resize WINDOW's exterior to WIDTH by HEIGHT.
+
+The content bitmap is replaced by a fresh blank one and the window's
+application, when present, is asked to repaint. Presentations over the
+old content are forgotten."
+  (let ((content-width (window--content-width width))
+        (content-height (window--content-height height)))
+    (unless (and (plusp content-width) (plusp content-height))
+      (error 'invalid-window-geometry :width width :height height))
+    (setf (window-width window) width)
+    (setf (window-height window) height)
+    (setf (window-content-bitmap window)
+          (make-bitmap content-width content-height))
+    (window-clear-presentations window)
+    (application-repaint (window-application window)))
   window)
 
 

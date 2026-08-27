@@ -24,6 +24,10 @@
    "A generic object inspector presented as a desktop window."))
 
 
+(defmethod application-repaint ((application inspector-window))
+  (inspector-window-repaint application))
+
+
 (defgeneric inspector-window-handle-event (inspector-window event)
   (:documentation
    "React to an input EVENT routed to INSPECTOR-WINDOW's window.

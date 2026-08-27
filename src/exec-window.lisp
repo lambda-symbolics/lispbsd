@@ -20,6 +20,10 @@
    "A Lisp Exec presented as an interactive desktop window."))
 
 
+(defmethod application-repaint ((application exec-window))
+  (exec-window-repaint application))
+
+
 (defgeneric exec-window-handle-event (exec-window event)
   (:documentation
    "React to an input EVENT routed to EXEC-WINDOW's window.

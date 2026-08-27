@@ -164,9 +164,11 @@
    #:window-lower
    #:window-move
    #:window-point->content
+   #:application-repaint
    #:window-raise
    #:window-region
    #:window-region-at
+   #:window-resize
    #:window-show
    #:window-title
    #:window-visible-p
