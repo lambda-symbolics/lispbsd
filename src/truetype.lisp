@@ -80,6 +80,15 @@ life of the font."
                             (truetype-font-loader font)))))
 
 
+(defparameter *system-font*
+  (let ((path (asdf:system-relative-pathname
+               '#:lispbsd "assets/fonts/IBMPlexMono-Regular.ttf")))
+    (if (probe-file path)
+        (make-truetype-font :path path :size 14)
+        *fixed-font*))
+  "The font used for window chrome and application window text.")
+
+
 (-> truetype--render-glyph (truetype-font character) glyph)
 (defun truetype--render-glyph (font character)
   "Rasterize CHARACTER from FONT's outlines into a 1-bit glyph.

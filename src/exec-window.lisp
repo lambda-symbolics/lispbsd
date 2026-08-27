@@ -98,7 +98,7 @@ the input line. Visible transcript lines are recorded as presentations
 of their forms, values, and conditions."
   (let* ((window (exec-window-window exec-window))
          (content (window-content-bitmap window))
-         (font *fixed-font*)
+         (font *system-font*)
          (visible-count (max 1 (floor (1- (bitmap-height content))
                                       (window-line-height))))
          (lines (exec-window--lines exec-window))

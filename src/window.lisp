@@ -2,10 +2,6 @@
 
 ;;;; -- Windows and Desktop --
 
-(defparameter *window-title-bar-height*
-  (+ (font-height *fixed-font*) 2)
-  "Pixel height of a window title bar, excluding its separator line.")
-
 (defparameter *window-text-margin*
   2
   "Pixel margin between window content edges and drawn text.")
@@ -23,10 +19,16 @@
   "Bound to *PRINT-LEVEL* when printing objects into window content.")
 
 
+(-> window-title-bar-height () integer)
+(defun window-title-bar-height ()
+  "Return the pixel height of a title bar, excluding its separator line."
+  (+ (font-height *system-font*) 2))
+
+
 (-> window-line-height () integer)
 (defun window-line-height ()
   "Return the pixel height of one text line in window content."
-  (1+ (font-height *fixed-font*)))
+  (1+ (font-height *system-font*)))
 
 
 (-> window-line-y (integer) integer)
@@ -179,7 +181,7 @@
 (-> window--content-height (integer) integer)
 (defun window--content-height (height)
   "Return the content height inside a window of exterior HEIGHT."
-  (- height 3 *window-title-bar-height*))
+  (- height 3 (window-title-bar-height)))
 
 
 (-> window--close-box-geometry (window)
@@ -189,9 +191,9 @@
 
 The box sits at the right end of the title bar. Returns three NILs
 when the window is too narrow to carry one."
-  (let* ((size (font-height *fixed-font*))
+  (let* ((size (font-height *system-font*))
          (box-x (- (window-width window) size 3))
-         (box-y (+ 1 (floor (- *window-title-bar-height* size) 2))))
+         (box-y (+ 1 (floor (- (window-title-bar-height) size) 2))))
     (if (plusp box-x)
         (values box-x box-y size)
         (values nil nil nil))))
@@ -357,7 +359,7 @@ Everything else is content."
                    (>= local-y box-y)
                    (< local-y (+ box-y box-size)))
           (return ':close-box)))
-      (if (<= local-y (1+ *window-title-bar-height*))
+      (if (<= local-y (1+ (window-title-bar-height)))
           ':title-bar
           ':content))))
 
@@ -371,7 +373,7 @@ Returns two values, the content X and Y, or NIL and NIL when the point
 lies outside the content region."
   (if (eq (window-region-at window x y) ':content)
       (values (- x (window-x window) 1)
-              (- y (window-y window) 2 *window-title-bar-height*))
+              (- y (window-y window) 2 (window-title-bar-height)))
       (values nil nil)))
 
 
@@ -440,10 +442,10 @@ The title bar is drawn ink-on-paper, or inverted when FOCUSED-P."
          (y (window-y window))
          (width (window-width window))
          (height (window-height window))
-         (title-height *window-title-bar-height*)
+         (title-height (window-title-bar-height))
          (title-bar (make-bitmap (window--content-width width) title-height
                                  :initial-element (if focused-p 1 0))))
-    (bitmap-draw-text title-bar *fixed-font* (window-title window)
+    (bitmap-draw-text title-bar *system-font* (window-title window)
                       :x 1 :y 1 :bit (if focused-p 0 1))
     (bitblt title-bar screen :dx (+ x 1) :dy (+ y 1))
     (multiple-value-bind (box-x box-y box-size)

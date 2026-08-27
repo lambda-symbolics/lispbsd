@@ -17,6 +17,10 @@
        (push (or ,description ',form) *test-failures*))))
 
 
+;; Geometry tests bind *system-font* to the fixed 8x8 font so their
+;; pixel coordinates stay stable regardless of the default face.
+
+
 (-> test-object-id () t)
 (defun test-object-id ()
   "Identifiers are 32-character hexadecimal strings."
@@ -325,7 +329,8 @@
 (-> test-window () t)
 (defun test-window ()
   "Windows stack, take focus, hit test, and compose onto the screen."
-  (let* ((desktop (make-desktop :width 32 :height 32))
+  (let* ((*system-font* *fixed-font*)
+         (desktop (make-desktop :width 32 :height 32))
          (bottom  (make-window :title "b" :x 2 :y 2 :width 20 :height 16))
          (top     (make-window :title "t" :x 8 :y 6 :width 20 :height 16)))
     (desktop-attach-window desktop bottom)
@@ -388,7 +393,8 @@
 (-> test-input () t)
 (defun test-input ()
   "Pointer and key events route through focus, stacking, and grabs."
-  (let* ((desktop  (make-desktop :width 32 :height 32))
+  (let* ((*system-font* *fixed-font*)
+         (desktop  (make-desktop :width 32 :height 32))
          (received nil)
          (handler  (lambda (window event)
                      (push (list window event) received)))
@@ -460,7 +466,8 @@
     (desktop-dispatch-event desktop (make-pointer-event :x 12 :y 22
                                                         :action ':release
                                                         :button ':left)))
-  (let ((desktop (make-desktop :width 8 :height 8)))
+  (let* ((*system-font* *fixed-font*)
+         (desktop (make-desktop :width 8 :height 8)))
     (test-assert (null (desktop-dispatch-event desktop
                                                (make-key-event :key ':a)))
                  "key events with no focused window go nowhere")))
@@ -482,7 +489,8 @@
                (test-assert (= 3 (bitmap-height read-back)))
                (test-assert (equal (bitmap-ascii bitmap)
                                    (bitmap-ascii read-back)))))
-           (let ((desktop (make-desktop :width 24 :height 24)))
+           (let* ((*system-font* *fixed-font*)
+                  (desktop (make-desktop :width 24 :height 24)))
              (desktop-attach-window desktop (make-window :title "s" :x 2 :y 2
                                                          :width 20 :height 16))
              (desktop-screenshot desktop path)
@@ -509,7 +517,8 @@
 (-> test-exec-window () t)
 (defun test-exec-window ()
   "Typing into a focused Exec window evaluates forms and renders results."
-  (let* ((desktop (make-desktop :width 160 :height 120))
+  (let* ((*system-font* *fixed-font*)
+         (desktop (make-desktop :width 160 :height 120))
          (exec-window (make-exec-window :world nil
                                         :package (find-package '#:lispbsd)
                                         :title "Exec"
@@ -557,7 +566,8 @@
 (-> test-inspector-window () t)
 (defun test-inspector-window ()
   "The inspector window navigates, descends, and renders object parts."
-  (let* ((desktop (make-desktop :width 160 :height 80))
+  (let* ((*system-font* *fixed-font*)
+         (desktop (make-desktop :width 160 :height 80))
          (inspector-window (make-inspector-window :object (list 1 2 3)
                                                   :x 2 :y 2
                                                   :width 120 :height 60))
@@ -603,7 +613,8 @@
 (-> test-presentation () t)
 (defun test-presentation ()
   "Presentations tie window content regions to live objects."
-  (let* ((window (make-window :x 0 :y 0 :width 40 :height 40))
+  (let* ((*system-font* *fixed-font*)
+         (window (make-window :x 0 :y 0 :width 40 :height 40))
          (first-presentation (window-present window 'alpha
                                              :type ':symbol
                                              :x 2 :y 2
@@ -621,7 +632,8 @@
     (test-assert (eq ':symbol (presentation-type second-presentation)))
     (window-clear-presentations window)
     (test-assert (null (window-presentations window))))
-  (let* ((desktop (make-desktop :width 160 :height 120))
+  (let* ((*system-font* *fixed-font*)
+         (desktop (make-desktop :width 160 :height 120))
          (exec-window (make-exec-window :world nil
                                         :package (find-package '#:lispbsd)
                                         :x 4 :y 4 :width 120 :height 80))
@@ -649,7 +661,8 @@
 (-> test-exec-inspect () t)
 (defun test-exec-inspect ()
   "Clicking a presented value in the Exec opens an inspector on it."
-  (let* ((desktop (make-desktop :width 400 :height 300))
+  (let* ((*system-font* *fixed-font*)
+         (desktop (make-desktop :width 400 :height 300))
          (exec-window (make-exec-window :world nil
                                         :package (find-package '#:lispbsd)
                                         :x 4 :y 4 :width 120 :height 80))
@@ -685,7 +698,8 @@
 (-> test-window-shadow () t)
 (defun test-window-shadow ()
   "Drop shadows dither onto the background but never onto other windows."
-  (let* ((desktop (make-desktop :width 48 :height 48))
+  (let* ((*system-font* *fixed-font*)
+         (desktop (make-desktop :width 48 :height 48))
          (left (make-window :title "l" :x 2 :y 2 :width 20 :height 16))
          (right (make-window :title "r" :x 24 :y 2 :width 20 :height 16))
          (screen (desktop-screen desktop)))
@@ -707,7 +721,8 @@
 (-> test-window-close-box () t)
 (defun test-window-close-box ()
   "The title bar close box detaches the window on click."
-  (let* ((desktop (make-desktop :width 64 :height 64))
+  (let* ((*system-font* *fixed-font*)
+         (desktop (make-desktop :width 64 :height 64))
          (window (make-window :title "w" :x 4 :y 4 :width 40 :height 30)))
     (desktop-attach-window desktop window)
     (test-assert (eq ':close-box (window-region-at window 36 8)))
@@ -723,9 +738,37 @@
     (test-assert (null (desktop-windows desktop)))
     (test-assert (null (window-desktop window)))
     (test-assert (null (desktop-focus desktop))))
-  (let ((narrow (make-window :x 0 :y 0 :width 11 :height 20)))
+  (let* ((*system-font* *fixed-font*)
+         (narrow (make-window :x 0 :y 0 :width 11 :height 20)))
     (test-assert (eq ':title-bar (window-region-at narrow 5 5))
                  "a window too narrow for a close box has no close region")))
+
+
+(-> test-system-font () t)
+(defun test-system-font ()
+  "The system font drives chrome metrics and application windows."
+  (test-assert (typep *system-font* 'truetype-font)
+               "the shipped truetype face is the system font")
+  (test-assert (= (window-title-bar-height)
+                  (+ (font-height *system-font*) 2)))
+  (let* ((desktop (make-desktop :width 400 :height 300))
+         (exec-window (make-exec-window :world nil
+                                        :package (find-package '#:lispbsd)
+                                        :x 10 :y 10 :width 300 :height 200)))
+    (desktop-attach-window desktop (exec-window-window exec-window))
+    (loop for character across "(+ 1 2)"
+          do (desktop-dispatch-event desktop
+                                     (make-key-event :key ':character
+                                                     :character character)))
+    (desktop-dispatch-event desktop (make-key-event :key ':return))
+    (test-assert (equal '(3)
+                        (exec-entry-values
+                         (first (exec-history
+                                 (exec-window-exec exec-window)))))
+                 "the exec evaluates under truetype metrics")
+    (desktop-compose desktop)
+    (test-assert (= 1 (bitmap-pixel (desktop-screen desktop) 10 10))
+                 "the window border composes under truetype metrics")))
 
 
 (-> run-tests () t)
@@ -745,6 +788,7 @@
   (test-bitmap)
   (test-font)
   (test-truetype-font)
+  (test-system-font)
   (test-window)
   (test-input)
   (test-bitmap-io)

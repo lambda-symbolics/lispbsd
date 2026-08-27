@@ -128,7 +128,7 @@ part line is drawn inverted. Parts scroll to keep the selection
 visible."
   (let* ((window (inspector-window-window inspector-window))
          (content (window-content-bitmap window))
-         (font *fixed-font*)
+         (font *system-font*)
          (object (inspector-window-object inspector-window))
          (parts (inspect-parts object))
          (selection (min (inspector-window-selection inspector-window)

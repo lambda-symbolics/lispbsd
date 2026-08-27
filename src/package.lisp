@@ -98,6 +98,7 @@
    #:make-bitmap-font
    #:make-fixed-font
    #:make-missing-glyph
+   #:*system-font*
    #:make-truetype-font
    #:truetype-font
    #:truetype-font-loader
@@ -108,9 +109,9 @@
    #:*window-print-level*
    #:*window-shadow-offset*
    #:*window-text-margin*
-   #:*window-title-bar-height*
    #:window-line-height
    #:window-line-y
+   #:window-title-bar-height
    #:desktop
    #:desktop-attach-window
    #:desktop-compose
