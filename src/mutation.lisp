@@ -78,28 +78,34 @@ durable mark, so journal replay excludes the failed mutation."
       record)))
 
 
+(-> journal-replay (journal runtime) integer)
+(defun journal-replay (journal runtime)
+  "Reinstall JOURNAL's durable definition mutations through RUNTIME.
+
+Only records with a durability mark are replayed, in append order.
+Returns the number of definitions reinstalled."
+  (let* ((records (journal-records journal))
+         (durable-ids (loop for record in records
+                            when (eq (journal-record-kind record)
+                                     ':durable-mark)
+                              collect (getf (journal-record-payload record)
+                                            ':marks)))
+         (replayed 0))
+    (dolist (record records)
+      (when (and (eq (journal-record-kind record) ':definition-mutation)
+                 (member (journal-record-id record) durable-ids
+                         :test #'equal))
+        (runtime-install-definition runtime
+                                    (getf (journal-record-payload record)
+                                          ':form))
+        (incf replayed)))
+    replayed))
+
+
 (-> world-replay-journal (world) integer)
 (defun world-replay-journal (world)
-  "Reinstall WORLD's durable definition mutations in append order.
-
-Only records with a durability mark are replayed. Returns the number
-of definitions reinstalled."
+  "Reinstall WORLD's durable definition mutations in append order."
   (let ((journal (world-journal world)))
     (unless journal
       (error 'world-journal-missing :world world))
-    (let* ((records (journal-records journal))
-           (durable-ids (loop for record in records
-                              when (eq (journal-record-kind record)
-                                       ':durable-mark)
-                                collect (getf (journal-record-payload record)
-                                              ':marks)))
-           (replayed 0))
-      (dolist (record records)
-        (when (and (eq (journal-record-kind record) ':definition-mutation)
-                   (member (journal-record-id record) durable-ids
-                           :test #'equal))
-          (runtime-install-definition (world-runtime world)
-                                      (getf (journal-record-payload record)
-                                            ':form))
-          (incf replayed)))
-      replayed)))
+    (journal-replay journal (world-runtime world))))
