@@ -288,6 +288,40 @@
       (test-assert (= 0 (bitmap-pixel missing 1 1))))))
 
 
+(-> test-truetype-font () t)
+(defun test-truetype-font ()
+  "TrueType fonts load, measure, kern, and rasterize onto 1-bit bitmaps."
+  (labels ((ink-somewhere-p (bitmap)
+             (loop for y from 0 below (bitmap-height bitmap)
+                     thereis (loop for x from 0 below (bitmap-width bitmap)
+                                     thereis (plusp (bitmap-pixel bitmap x y))))))
+    (let ((font (make-truetype-font
+                 :path (asdf:system-relative-pathname
+                        '#:lispbsd "assets/fonts/IBMPlexMono-Regular.ttf")
+                 :size 14)))
+      (test-assert (typep font 'truetype-font))
+      (test-assert (plusp (font-height font)))
+      (test-assert (< (font-ascent font) (font-height font)))
+      (let ((m-glyph (font-glyph font #\M)))
+        (test-assert (plusp (glyph-advance m-glyph)))
+        (test-assert (ink-somewhere-p (glyph-bitmap m-glyph))
+                     "the M glyph rasterizes some ink"))
+      (test-assert (eq (font-glyph font #\M) (font-glyph font #\M))
+                   "rendered glyphs are cached")
+      (test-assert (= (glyph-advance (font-glyph font #\i))
+                      (glyph-advance (font-glyph font #\M)))
+                   "the face is monospaced")
+      (test-assert (= (font-text-width font "MM")
+                      (* 2 (glyph-advance (font-glyph font #\M)))))
+      (test-assert (integerp (font-kerning font #\A #\V)))
+      (test-assert (not (ink-somewhere-p (glyph-bitmap (font-glyph font #\Space))))
+                   "the space glyph is empty")
+      (let ((bitmap (make-bitmap 80 20)))
+        (bitmap-draw-text bitmap font "Lisp" :x 1 :y 1)
+        (test-assert (ink-somewhere-p bitmap)
+                     "drawing TrueType text produces ink")))))
+
+
 (-> test-window () t)
 (defun test-window ()
   "Windows stack, take focus, hit test, and compose onto the screen."
@@ -710,6 +744,7 @@
   (test-runtime-identity)
   (test-bitmap)
   (test-font)
+  (test-truetype-font)
   (test-window)
   (test-input)
   (test-bitmap-io)
