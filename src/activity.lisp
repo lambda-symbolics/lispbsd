@@ -33,6 +33,10 @@
     :initform nil
     :accessor activity-parent
     :documentation "Supervisory parent activity, if any.")
+   (activity-supervisor
+    :initform nil
+    :accessor activity-supervisor
+    :documentation "Supervisor responsible for this activity, or NIL.")
    (activity-children
     :initform nil
     :accessor activity-children
@@ -84,6 +88,16 @@
   (setf (activity-state activity) state))
 
 
+(defgeneric activity-failed-hook (supervisor activity)
+  (:documentation
+   "React to ACTIVITY failing under SUPERVISOR.
+
+Called on the failing activity's thread after the failure is recorded.
+The null method does nothing, for unsupervised activities.")
+  (:method ((supervisor null) activity)
+    activity))
+
+
 (-> activity--run (activity) t)
 (defun activity--run (activity)
   "Run ACTIVITY's body, recording failure or a clean stop."
@@ -102,7 +116,8 @@
           (emit-event (world-history world)
                       ':activity-failed
                       :source activity
-                      :payload (list :condition condition)))))))
+                      :payload (list :condition condition))))
+      (activity-failed-hook (activity-supervisor activity) activity))))
 
 
 (-> start-activity (activity) activity)

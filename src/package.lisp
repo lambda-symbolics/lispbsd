@@ -314,10 +314,12 @@
    #:activity
    #:activity-authorities
    #:activity-children
+   #:activity-failed-hook
    #:activity-id
    #:activity-name
    #:activity-parent
    #:activity-state
+   #:activity-supervisor
    #:activity-world
    #:debug-activity
    #:interrupt-activity
@@ -329,6 +331,17 @@
    #:start-activity
    #:stop-activity
    #:suspend-activity
+   ;; Supervision
+   #:make-supervision-policy
+   #:make-supervisor
+   #:supervision-policy
+   #:supervision-policy-maximum-restarts
+   #:supervision-policy-restart-p
+   #:supervision-policy-window
+   #:supervisor
+   #:supervisor-adopt
+   #:supervisor-children
+   #:supervisor-policy
    ;; Generation
    #:generation
    #:generation-created-at

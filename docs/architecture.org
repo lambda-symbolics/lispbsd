@@ -46,6 +46,7 @@ The running system has five components with explicit interfaces:
 | =src/machine.lisp= | Hosted machine inventory |
 | =src/network.lisp= | Interface control protocol over pluggable substrates |
 | =src/activity.lisp= | Schedulable computations |
+| =src/supervisor.lisp= | Policy-driven restart supervision of activities |
 | =src/generation.lisp= | Generation metadata |
 | =src/world.lisp= | Live world and startup phases |
 | =src/mutation.lisp= | Durable definition mutations and journal replay |

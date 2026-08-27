@@ -40,6 +40,7 @@
                              (:file "machine")
                              (:file "network")
                              (:file "activity")
+                             (:file "supervisor")
                              (:file "generation")
                              (:file "world")
                              (:file "mutation")

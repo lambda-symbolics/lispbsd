@@ -164,6 +164,78 @@
       (world-shutdown world))))
 
 
+(-> test-supervision () t)
+(defun test-supervision ()
+  "Supervisors restart failing activities within their policy."
+  (labels ((await (predicate)
+             (loop repeat 300
+                   do (when (funcall predicate)
+                        (return t))
+                      (sleep 0.02))))
+    (let ((world (make-hosted-world :name "supervision-world")))
+      (unwind-protect
+           (progn
+             (let* ((runs 0)
+                    (supervisor (make-supervisor))
+                    (activity (make-activity
+                               "flaky"
+                               (lambda (self)
+                                 (declare (ignore self))
+                                 (incf runs)
+                                 (when (< runs 2)
+                                   (error "flaky failure")))
+                               :world world)))
+               (supervisor-adopt supervisor activity)
+               (test-assert (eq supervisor (activity-supervisor activity)))
+               (start-activity activity)
+               (test-assert (await (lambda ()
+                                     (eq (activity-state activity) ':stopped)))
+                            "the restarted activity finishes cleanly")
+               (test-assert (= 2 runs) "one failure means one restart")
+               (test-assert (events-of-kind (world-history world)
+                                            ':supervision-restarted)))
+             (let* ((runs 0)
+                    (supervisor (make-supervisor
+                                 :policy (make-supervision-policy
+                                          :maximum-restarts 2)))
+                    (activity (make-activity
+                               "doomed"
+                               (lambda (self)
+                                 (declare (ignore self))
+                                 (incf runs)
+                                 (error "always fails"))
+                               :world world)))
+               (supervisor-adopt supervisor activity)
+               (start-activity activity)
+               (test-assert (await (lambda ()
+                                     (events-of-kind (world-history world)
+                                                     ':supervision-gave-up)))
+                            "exhausted restarts give up")
+               (test-assert (await (lambda ()
+                                     (eq (activity-state activity) ':failed))))
+               (test-assert (= 3 runs)
+                            "two restarts allow three runs in total"))
+             (let* ((runs 0)
+                    (supervisor (make-supervisor
+                                 :policy (make-supervision-policy
+                                          :restart-p nil)))
+                    (activity (make-activity
+                               "unrestarted"
+                               (lambda (self)
+                                 (declare (ignore self))
+                                 (incf runs)
+                                 (error "fails once"))
+                               :world world)))
+               (supervisor-adopt supervisor activity)
+               (start-activity activity)
+               (test-assert (await (lambda ()
+                                     (eq (activity-state activity) ':failed))))
+               (sleep 0.1)
+               (test-assert (= 1 runs)
+                            "a no-restart policy leaves the failure alone")))
+        (world-shutdown world)))))
+
+
 (-> test-exec () t)
 (defun test-exec ()
   "The Exec evaluates forms and records errors."
@@ -1189,6 +1261,7 @@
   (test-event-queries)
   (test-activity-mailbox)
   (test-activity-failure)
+  (test-supervision)
   (test-exec)
   (test-inspector-and-definitions)
   (test-runtime-identity)
