@@ -169,6 +169,8 @@
    #:window-region
    #:window-region-at
    #:window-resize
+   #:window-resize-corner-p
+   #:desktop-window-resize
    #:window-show
    #:window-title
    #:window-visible-p

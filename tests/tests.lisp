@@ -1271,6 +1271,40 @@
         (test-assert t)))))
 
 
+(-> test-window-reshape () t)
+(defun test-window-reshape ()
+  "Dragging the bottom-right border corner reshapes the window."
+  (let* ((*system-font* *fixed-font*)
+         (desktop (make-desktop :width 200 :height 200))
+         (exec-window (make-exec-window :world nil
+                                        :package (find-package '#:lispbsd)
+                                        :x 4 :y 4 :width 100 :height 60))
+         (window (exec-window-window exec-window)))
+    (desktop-attach-window desktop window)
+    (test-assert (window-resize-corner-p window 103 63))
+    (test-assert (not (window-resize-corner-p window 4 63))
+                 "the bottom-left border is not a resize corner")
+    (desktop-dispatch-event desktop (make-pointer-event :x 103 :y 63
+                                                        :action ':press
+                                                        :button ':left))
+    (test-assert (eq window (desktop-window-resize desktop)))
+    (test-assert (null (desktop-window-drag desktop)))
+    (desktop-dispatch-event desktop (make-pointer-event :x 143 :y 93
+                                                        :action ':move))
+    (test-assert (= 140 (window-width window)))
+    (test-assert (= 90 (window-height window)))
+    (test-assert (= 1 (bitmap-pixel (window-content-bitmap window) 4 2))
+                 "the exec repainted after the reshape")
+    (desktop-dispatch-event desktop (make-pointer-event :x 143 :y 93
+                                                        :action ':release
+                                                        :button ':left))
+    (test-assert (null (desktop-window-resize desktop)))
+    (desktop-dispatch-event desktop (make-pointer-event :x 60 :y 160
+                                                        :action ':move))
+    (test-assert (= 140 (window-width window))
+                 "motion after the release no longer reshapes")))
+
+
 (-> test-window-menu () t)
 (defun test-window-menu ()
   "A right press on a title bar offers Close and Hide."
@@ -1531,6 +1565,7 @@
   (test-window-shadow)
   (test-window-close-box)
   (test-window-resize)
+  (test-window-reshape)
   (test-window-menu)
   (if *test-failures*
       (error "~D assertion~:P failed of ~D:~%~{  ~A~%~}"

@@ -168,6 +168,10 @@
     :initform nil
     :accessor desktop-window-drag
     :documentation "Active title-bar drag as (window offset-x offset-y), or NIL.")
+   (desktop-window-resize
+    :initform nil
+    :accessor desktop-window-resize
+    :documentation "The window being reshaped by a corner drag, or NIL.")
    (desktop-menu
     :initform nil
     :accessor desktop-menu
@@ -360,7 +364,15 @@ old content are forgotten."
   window)
 
 
-(-> window-contains-point-p (window integer integer) boolean)
+(-> window-resize-corner-p (window integer integer) boolean)
+(defun window-resize-corner-p (window x y)
+  "Return true when desktop point (X, Y) is in WINDOW's resize corner.
+
+The resize corner is the bottom-right end of the border."
+  (and (eq (window-region-at window x y) ':border)
+       (> (- x (window-x window)) (- (window-width window) 9))
+       (> (- y (window-y window)) (- (window-height window) 9))
+       t))
 (defun window-contains-point-p (window x y)
   "Return true when desktop point (X, Y) lies inside WINDOW's exterior."
   (and (>= x (window-x window))

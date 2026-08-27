@@ -106,11 +106,13 @@ Key events go to the focused window."))
                                      :y y)
                   (return-from desktop-dispatch-event window))
                 (setf (desktop-pointer-grab desktop) window)
-                (when (eq (window-region-at window x y) ':title-bar)
-                  (setf (desktop-window-drag desktop)
-                        (list window
-                              (- x (window-x window))
-                              (- y (window-y window))))))
+                (cond ((window-resize-corner-p window x y)
+                       (setf (desktop-window-resize desktop) window))
+                      ((eq (window-region-at window x y) ':title-bar)
+                       (setf (desktop-window-drag desktop)
+                             (list window
+                                   (- x (window-x window))
+                                   (- y (window-y window)))))))
                ((and (eq (pointer-event-button event) ':right)
                      (desktop-menu-items-function desktop))
                 (desktop-open-menu desktop
@@ -121,13 +123,20 @@ Key events go to the focused window."))
                                    :y y))))
         (:release
          (setf (desktop-pointer-grab desktop) nil)
-         (setf (desktop-window-drag desktop) nil))
+         (setf (desktop-window-drag desktop) nil)
+         (setf (desktop-window-resize desktop) nil))
         (:move
-         (let ((drag (desktop-window-drag desktop)))
-           (when drag
-             (window-move (first drag)
-                          :x (- x (second drag))
-                          :y (- y (third drag)))))))
+         (let ((drag (desktop-window-drag desktop))
+               (resize (desktop-window-resize desktop)))
+           (cond (resize
+                  (window-resize resize
+                                 :width (max 12 (1+ (- x (window-x resize))))
+                                 :height (max (+ 4 (window-title-bar-height))
+                                              (1+ (- y (window-y resize))))))
+                 (drag
+                  (window-move (first drag)
+                               :x (- x (second drag))
+                               :y (- y (third drag))))))))
       (when window
         (window--deliver-event window event))
       window)))
