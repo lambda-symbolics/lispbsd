@@ -372,6 +372,11 @@
    #:generation-store-record
    #:make-generation-store
    #:world-checkpoint
+   ;; Image
+   #:build-world-image
+   #:image-build-failed
+   #:image-error
+   #:journal-replay
    ;; World
    #:*world*
    #:make-hosted-world

@@ -46,6 +46,7 @@
                              (:file "world")
                              (:file "mutation")
                              (:file "checkpoint")
+                             (:file "image")
                              (:file "definition")
                              (:file "inspector")
                              (:file "exec")

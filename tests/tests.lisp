@@ -1387,6 +1387,45 @@
       (ignore-errors (uiop:delete-directory-tree directory :validate t)))))
 
 
+(-> test-world-image () t)
+(defun test-world-image ()
+  "A bootable heap image is built in a child with mutations replayed."
+  (let* ((core-path (merge-pathnames
+                     (format nil "lispbsd-core-~A.core" (make-object-id))
+                     (uiop:temporary-directory)))
+         (journal-path (merge-pathnames
+                        (format nil "lispbsd-image-journal-~A.lisp"
+                                (make-object-id))
+                        (uiop:temporary-directory)))
+         (journal (make-journal :path journal-path))
+         (record (journal-append journal ':definition-mutation
+                                 (list ':form
+                                       '(defun lispbsd-imaged-function ()
+                                          77)))))
+    (journal-mark-durable journal (journal-record-id record))
+    (unwind-protect
+         (progn
+           (build-world-image :core-path core-path
+                              :journal-path journal-path)
+           (test-assert (probe-file core-path) "the core file exists")
+           (let ((output (uiop:run-program
+                          (list (namestring sb-ext:*runtime-pathname*)
+                                "--core" (namestring core-path)
+                                "--non-interactive"
+                                "--no-sysinit"
+                                "--no-userinit"
+                                "--eval"
+                                "(progn (lispbsd:make-hosted-world :name \"imaged\") (princ (lispbsd:world-phase lispbsd:*world*)) (princ (funcall (intern \"LISPBSD-IMAGED-FUNCTION\" \"LISPBSD\"))))")
+                          :output ':string
+                          :error-output ':output)))
+             (test-assert (search "OPERATIONAL" output)
+                          "the imaged system boots a world")
+             (test-assert (search "77" output)
+                          "the imaged system replayed the mutation")))
+      (ignore-errors (delete-file core-path))
+      (ignore-errors (delete-file journal-path)))))
+
+
 (-> run-tests () t)
 (defun run-tests ()
   "Run the LispBSD test suite and signal an error on failure."
@@ -1397,6 +1436,7 @@
   (test-authority)
   (test-generation-roundtrip)
   (test-checkpoint)
+  (test-world-image)
   (test-journal)
   (test-world-mutation)
   (test-network-control)
