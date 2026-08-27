@@ -303,7 +303,43 @@ this adapter and the protocol exposes typed objects."))
             (network-address-value address))))
 
 
-(-> netbsd-network--ifconfig (list keyword network-interface) string)
+(-> probe-netbsd-network-interfaces () list)
+(defun probe-netbsd-network-interfaces ()
+  "Return network-interface resources discovered via NetBSD ifconfig."
+  (handler-case
+      (let ((output (make-string-output-stream)))
+        (sb-ext:run-program "/sbin/ifconfig" (list "-l")
+                            :output output
+                            :wait t)
+        (loop for name in (uiop:split-string
+                           (string-trim '(#\Space #\Newline)
+                                        (get-output-stream-string output)))
+              when (plusp (length name))
+                collect (let ((detail (netbsd-network--ifconfig (list name)
+                                                                ':probe nil)))
+                          (make-instance 'network-interface
+                                         :name name
+                                         :address (netbsd-network--parse-hardware-address
+                                                   detail)
+                                         :operstate (if (netbsd-network--flags-up-p detail)
+                                                        "up"
+                                                        "down")))))
+    (error ()
+      nil)))
+
+
+(-> netbsd-network--parse-hardware-address (string) (option string))
+(defun netbsd-network--parse-hardware-address (output)
+  "Return the hardware address reported in ifconfig OUTPUT, or NIL."
+  (let ((start (search "address: " output)))
+    (when start
+      (let ((value-start (+ start (length "address: "))))
+        (string-trim '(#\Space #\Tab)
+                     (subseq output value-start
+                             (position #\Newline output :start value-start)))))))
+
+
+(-> netbsd-network--ifconfig (list keyword (option network-interface)) string)
 (defun netbsd-network--ifconfig (arguments operation interface)
   "Run /sbin/ifconfig with ARGUMENTS and return its output.
 

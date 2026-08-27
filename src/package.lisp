@@ -273,6 +273,7 @@
    #:network-substrate-interface-state
    #:network-substrate-remove-interface-address
    #:network-substrate-set-interface-state
+   #:probe-netbsd-network-interfaces
    #:probe-network-substrate
    #:resource
    #:resource-id
