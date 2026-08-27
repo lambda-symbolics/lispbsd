@@ -10,6 +10,10 @@
   2
   "Pixel margin between window content edges and drawn text.")
 
+(defparameter *window-shadow-offset*
+  4
+  "Pixel offset of the dithered drop shadow right of and below a window.")
+
 (defparameter *window-print-length*
   16
   "Bound to *PRINT-LENGTH* when printing objects into window content.")
@@ -384,25 +388,46 @@ lies outside the content region."
 (defun desktop-compose (desktop)
   "Render the background and all visible windows onto DESKTOP's screen.
 
-Windows are drawn bottom to top; the focused window's title bar is
-inverted. Returns the screen bitmap."
+Windows are drawn bottom to top over a white background, each casting
+a dithered drop shadow that never falls on another window. The focused
+window's title bar is inverted. Returns the screen bitmap."
   (let ((screen (desktop-screen desktop)))
-    (desktop--draw-background desktop)
+    (bitmap-clear screen)
     (dolist (window (desktop-windows desktop))
       (when (window-visible-p window)
+        (desktop--draw-window-shadow desktop window)
         (window--draw window screen (eq window (desktop-focus desktop)))))
     screen))
 
 
-(-> desktop--draw-background (desktop) bitmap)
-(defun desktop--draw-background (desktop)
-  "Fill DESKTOP's screen with the 50 percent gray stipple."
+(-> desktop--draw-window-shadow (desktop window) bitmap)
+(defun desktop--draw-window-shadow (desktop window)
+  "Draw WINDOW's dithered drop shadow onto the screen background.
+
+The shadow is a 50 percent dither offset right of and below the
+window. Pixels covered by any other visible window are left alone."
   (let* ((screen (desktop-screen desktop))
-         (bits (bitmap-bits screen)))
-    (dotimes (y (bitmap-height screen))
-      (dotimes (x (bitmap-width screen))
-        (setf (aref bits y x)
-              (if (evenp (+ x y)) 1 0))))
+         (offset *window-shadow-offset*)
+         (x (window-x window))
+         (y (window-y window))
+         (width (window-width window))
+         (height (window-height window)))
+    (flet ((shadow-pixel (shadow-x shadow-y)
+             (when (and (evenp (+ shadow-x shadow-y))
+                        (notany (lambda (other)
+                                  (and (not (eq other window))
+                                       (window-visible-p other)
+                                       (window-contains-point-p other
+                                                                shadow-x
+                                                                shadow-y)))
+                                (desktop-windows desktop)))
+               (setf (bitmap-pixel screen shadow-x shadow-y) 1))))
+      (loop for shadow-y from (+ y offset) below (+ y height offset)
+            do (loop for shadow-x from (+ x width) below (+ x width offset)
+                     do (shadow-pixel shadow-x shadow-y)))
+      (loop for shadow-y from (+ y height) below (+ y height offset)
+            do (loop for shadow-x from (+ x offset) below (+ x width)
+                     do (shadow-pixel shadow-x shadow-y))))
     screen))
 
 

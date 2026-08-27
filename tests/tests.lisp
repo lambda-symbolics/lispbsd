@@ -306,8 +306,10 @@
     (test-assert (eq bottom (desktop-window-at desktop 10 8)))
     (bitmap-fill (window-content-bitmap bottom) :bit 1)
     (let ((screen (desktop-compose desktop)))
-      (test-assert (= 1 (bitmap-pixel screen 0 0)) "stipple ink at origin")
-      (test-assert (= 0 (bitmap-pixel screen 1 0)) "stipple paper beside origin")
+      (test-assert (= 0 (bitmap-pixel screen 0 0)) "background is white")
+      (test-assert (= 1 (bitmap-pixel screen 23 7)) "shadow dither ink")
+      (test-assert (= 0 (bitmap-pixel screen 22 7)) "shadow dither paper")
+      (test-assert (= 1 (bitmap-pixel screen 6 18)) "shadow below the window")
       (test-assert (= 1 (bitmap-pixel screen 2 2)) "window border corner")
       (test-assert (= 1 (bitmap-pixel screen 21 17)) "window border far corner")
       (test-assert (= 1 (bitmap-pixel screen 19 4)) "focused title bar is ink")
@@ -448,8 +450,10 @@
              (desktop-screenshot desktop path)
              (let ((screen (bitmap-read-pbm path)))
                (test-assert (= 24 (bitmap-width screen)))
-               (test-assert (= 1 (bitmap-pixel screen 0 0))
-                            "screenshot keeps the background stipple")
+               (test-assert (= 0 (bitmap-pixel screen 0 0))
+                            "screenshot keeps the white background")
+               (test-assert (= 1 (bitmap-pixel screen 22 8))
+                            "screenshot keeps the drop shadow")
                (test-assert (= 1 (bitmap-pixel screen 2 2))
                             "screenshot keeps the window border")))
            (with-open-file (stream path :direction ':output
@@ -640,6 +644,28 @@
                  "clicking an unpresented point opens nothing")))
 
 
+(-> test-window-shadow () t)
+(defun test-window-shadow ()
+  "Drop shadows dither onto the background but never onto other windows."
+  (let* ((desktop (make-desktop :width 48 :height 48))
+         (left (make-window :title "l" :x 2 :y 2 :width 20 :height 16))
+         (right (make-window :title "r" :x 24 :y 2 :width 20 :height 16))
+         (screen (desktop-screen desktop)))
+    (desktop-attach-window desktop left)
+    (desktop-attach-window desktop right)
+    (desktop-focus-window desktop left)
+    (window-raise left)
+    (desktop-compose desktop)
+    (test-assert (= 1 (bitmap-pixel screen 22 8))
+                 "shadow falls on the background")
+    (test-assert (= 1 (bitmap-pixel screen 6 18))
+                 "shadow falls below the window")
+    (test-assert (= 0 (bitmap-pixel screen 25 7))
+                 "shadow never falls on another window")
+    (test-assert (= 1 (bitmap-pixel screen 22 20))
+                 "shadow resumes past the covering window")))
+
+
 (-> test-window-close-box () t)
 (defun test-window-close-box ()
   "The title bar close box detaches the window on click."
@@ -687,6 +713,7 @@
   (test-inspector-window)
   (test-presentation)
   (test-exec-inspect)
+  (test-window-shadow)
   (test-window-close-box)
   (if *test-failures*
       (error "~D assertion~:P failed of ~D:~%~{  ~A~%~}"

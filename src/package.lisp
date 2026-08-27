@@ -72,6 +72,7 @@
    ;; Windows and desktop
    #:*window-print-length*
    #:*window-print-level*
+   #:*window-shadow-offset*
    #:*window-text-margin*
    #:*window-title-bar-height*
    #:window-line-height
