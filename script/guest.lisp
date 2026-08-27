@@ -12,10 +12,6 @@
 (defparameter *guest-serial-log* nil
   "Stream receiving a raw copy of everything read from the serial console.")
 
-(defparameter *debugger-prompt*
-  (format nil "~%0] ")
-  "SBCL debugger prompt, newline-anchored so kernel timestamps do not match.")
-
 (defparameter *default-kernel*
   "/root/common-lisp/refs/netbsd-obj/sys/arch/amd64/compile/LISPBSD/netbsd"
   "Default Multiboot kernel built by script/netbsd-build.")
@@ -98,10 +94,21 @@
         (sleep 0.5)))))
 
 (defun guest-send (stream string)
-  "Write STRING to STREAM followed by a carriage return."
-  (write-string string stream)
-  (write-char #\Return stream)
-  (force-output stream))
+  "Write STRING to STREAM line by line, each ended by a carriage return.
+
+Lines are paced so multi-line commands never overrun the guest
+terminal's input buffer."
+  (let ((start 0))
+    (loop
+      (let ((newline (position #\Newline string :start start)))
+        (write-string string stream :start start
+                                    :end (or newline (length string)))
+        (write-char #\Return stream)
+        (force-output stream)
+        (unless newline
+          (return))
+        (setf start (1+ newline))
+        (sleep 0.1)))))
 
 (defun guest-read (stream timeout)
   "Read available characters from STREAM, waiting up to TIMEOUT seconds."
@@ -117,26 +124,42 @@
                         (force-output *guest-serial-log*))
                       (return chunk))))))
 
+(defun guest-buffer-ends-with-p (buffer pattern)
+  "Return true when BUFFER ends with PATTERN."
+  (let ((buffer-length (length buffer))
+        (pattern-length (length pattern)))
+    (and (>= buffer-length pattern-length)
+         (string= buffer pattern :start1 (- buffer-length pattern-length)))))
+
 (defun guest-wait-for-any (stream patterns timeout)
-  "Accumulate STREAM output until one of PATTERNS appears."
+  "Accumulate STREAM output until it ends quietly with one of PATTERNS.
+
+A prompt only counts when it is the suffix of the stream and no more
+output follows shortly, so prompt-like text inside boot noise or
+command echo cannot satisfy the wait."
   (let ((buffer (make-array 0 :element-type 'character :adjustable t :fill-pointer 0))
         (deadline (+ (get-internal-real-time)
                      (floor (* timeout internal-time-units-per-second)))))
-    (loop
-      (let ((remaining (/ (- deadline (get-internal-real-time))
-                          internal-time-units-per-second)))
-        (when (<= remaining 0)
-          (error 'guest-error
-                 :message (format nil "timed out waiting for ~S; saw:~%~A"
-                                  patterns buffer)))
-        (let ((chunk (guest-read stream (max 0.1 (min 1 remaining)))))
-          (when chunk
-            (loop for character across chunk do
-              (vector-push-extend character buffer))
+    (flet ((append-chunk (chunk)
+             (loop for character across chunk do
+               (vector-push-extend character buffer))))
+      (loop
+        (let ((remaining (/ (- deadline (get-internal-real-time))
+                            internal-time-units-per-second)))
+          (when (<= remaining 0)
+            (error 'guest-error
+                   :message (format nil "timed out waiting for ~S; saw:~%~A"
+                                    patterns buffer)))
+          (let ((chunk (guest-read stream (max 0.1 (min 1 remaining)))))
+            (when (and chunk (plusp (length chunk)))
+              (append-chunk chunk))
             (when (find-if (lambda (pattern)
-                             (search pattern buffer))
+                             (guest-buffer-ends-with-p buffer pattern))
                            patterns)
-              (return (copy-seq buffer)))))))))
+              (let ((more (guest-read stream 0.3)))
+                (if (and more (plusp (length more)))
+                    (append-chunk more)
+                    (return (copy-seq buffer)))))))))))
 
 (defun guest-wait-for (stream pattern timeout)
   "Accumulate STREAM output until PATTERN appears."
@@ -165,12 +188,13 @@
                          :error-output :output)))
 
 (defun guest-lisp-prompt-p (text)
-  "Return true when TEXT contains a Lisp REPL or debugger prompt."
-  (or (search "* " text) (search *debugger-prompt* text)))
+  "Return true when TEXT ends at a Lisp REPL or debugger prompt."
+  (or (guest-buffer-ends-with-p text "* ")
+      (guest-buffer-ends-with-p text "] ")))
 
 (defun guest-login (stream)
   "Reach a root shell or Lisp listener on STREAM. Return :unix or :lisp."
-  (let ((text (guest-wait-for-any stream (list "login:" "* " *debugger-prompt* "pathname of shell") 120)))
+  (let ((text (guest-wait-for-any stream (list "login: " "* " "] " "/bin/sh: ") 120)))
     (cond
       ((and (guest-lisp-prompt-p text)
             (not (search "login:" text))
@@ -178,7 +202,7 @@
        :lisp)
       ((search "pathname of shell" text)
        (guest-send stream "")
-       (let ((after (guest-wait-for-any stream (list "# " "$ " "* " *debugger-prompt*) 30)))
+       (let ((after (guest-wait-for-any stream (list "# " "$ " "* " "] ") 60)))
          (if (guest-lisp-prompt-p after)
              :lisp
              (progn
@@ -187,10 +211,10 @@
                :unix))))
       (t
        (guest-send stream "root")
-       (let ((after (guest-wait-for-any stream (list "Password:" "# " "$ " "* " *debugger-prompt*) 600)))
+       (let ((after (guest-wait-for-any stream (list "Password:" "# " "$ " "* " "] ") 600)))
          (when (search "Password:" after)
            (guest-send stream "")
-           (setf after (guest-wait-for-any stream (list "# " "$ " "* " *debugger-prompt*) 600)))
+           (setf after (guest-wait-for-any stream (list "# " "$ " "* " "] ") 600)))
          (cond
            ((guest-lisp-prompt-p after)
             :lisp)
@@ -204,11 +228,10 @@
   (if (eq console :lisp)
       (progn
         (guest-send stream command)
-        (let* ((text (guest-wait-for-any stream (list "* " *debugger-prompt*) timeout))
+        (let* ((text (guest-wait-for-any stream (list "* " "] ") timeout))
                (echo-end (let ((cr (position #\Return text)))
                            (if cr (1+ cr) 0)))
-               (prompt-start (or (search "* " text :from-end t)
-                                 (search *debugger-prompt* text :from-end t))))
+               (prompt-start (position #\Newline text :from-end t)))
           (string-trim '(#\Space #\Tab #\Return #\Newline)
                        (subseq text echo-end (or prompt-start (length text))))))
       (progn
@@ -224,7 +247,7 @@
   "Halt the guest and wait for QEMU to exit."
   (ignore-errors
     (if (eq console :lisp)
-        (guest-send stream "(sb-ext:quit)")
+        (guest-send stream "(sb-ext:exit :abort t)")
         (guest-send stream "shutdown -p now")))
   (let ((deadline (+ (get-internal-real-time)
                      (* 30 internal-time-units-per-second))))
