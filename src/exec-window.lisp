@@ -15,7 +15,12 @@
     :initform ""
     :accessor exec-window-input
     :type string
-    :documentation "The line currently being typed."))
+    :documentation "The line currently being typed.")
+   (exec-window-recall-index
+    :initform nil
+    :accessor exec-window-recall-index
+    :type (option integer)
+    :documentation "Position while recalling earlier inputs, or NIL."))
   (:documentation
    "A Lisp Exec presented as an interactive desktop window."))
 
@@ -66,6 +71,10 @@ ignored. Returns EXEC-WINDOW."))
              (exec-window--submit exec-window))
             ((eq key ':backspace)
              (exec-window--erase exec-window))
+            ((eq key ':up)
+             (exec-window--recall exec-window -1))
+            ((eq key ':down)
+             (exec-window--recall exec-window 1))
             ((and character (graphic-char-p character))
              (exec-window--insert exec-window character))))
     (exec-window-repaint exec-window))
@@ -171,9 +180,40 @@ record is the input line prefixed with the prompt."
     (nreverse lines)))
 
 
+(-> exec-window--recall (exec-window integer) exec-window)
+(defun exec-window--recall (exec-window delta)
+  "Replace the input line with an earlier or later remembered input.
+
+DELTA -1 steps back through the history; DELTA 1 steps forward and
+past the newest input restores an empty line."
+  (let* ((inputs (remove nil (mapcar #'exec-entry-input
+                                     (exec-history
+                                      (exec-window-exec exec-window)))))
+         (count (length inputs))
+         (index (exec-window-recall-index exec-window)))
+    (block nil
+      (when (zerop count)
+        (return))
+      (let ((next (if index
+                      (+ index delta)
+                      (if (minusp delta)
+                          (1- count)
+                          (return)))))
+        (when (minusp next)
+          (setf next 0))
+        (when (>= next count)
+          (setf (exec-window-recall-index exec-window) nil)
+          (setf (exec-window-input exec-window) "")
+          (return))
+        (setf (exec-window-recall-index exec-window) next)
+        (setf (exec-window-input exec-window) (nth next inputs)))))
+  exec-window)
+
+
 (-> exec-window--insert (exec-window character) exec-window)
 (defun exec-window--insert (exec-window character)
   "Append CHARACTER to the input line."
+  (setf (exec-window-recall-index exec-window) nil)
   (setf (exec-window-input exec-window)
         (concatenate 'string
                      (exec-window-input exec-window)
@@ -223,5 +263,6 @@ Whitespace-only input is cleared without evaluation."
   (let ((input (string-trim " " (exec-window-input exec-window))))
     (when (plusp (length input))
       (exec-evaluate (exec-window-exec exec-window) input))
+    (setf (exec-window-recall-index exec-window) nil)
     (setf (exec-window-input exec-window) ""))
   exec-window)

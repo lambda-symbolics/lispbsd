@@ -3,7 +3,12 @@
 ;;;; -- Lisp Exec --
 
 (defclass exec-entry ()
-  ((exec-entry-form
+  ((exec-entry-input
+    :initarg :input
+    :initform nil
+    :reader exec-entry-input
+    :documentation "Exact input text this entry came from, if textual.")
+   (exec-entry-form
     :initarg :form
     :reader exec-entry-form
     :documentation "Form that was evaluated.")
@@ -66,23 +71,29 @@
 
 A reader failure records the raw INPUT as the entry's form; an
 evaluation failure records the successfully read form."
-  (block nil
-    (let ((form (handler-case
-                    (exec--read exec input)
-                  (error (condition)
-                    (return (make-instance 'exec-entry
-                                           :form input
-                                           :condition condition))))))
-      (handler-case
-          (let ((*world* world)
-                (*package* (exec-package exec)))
+  (let ((input-text (if (stringp input)
+                        input
+                        (prin1-to-string input))))
+    (block nil
+      (let ((form (handler-case
+                      (exec--read exec input)
+                    (error (condition)
+                      (return (make-instance 'exec-entry
+                                             :input input-text
+                                             :form input
+                                             :condition condition))))))
+        (handler-case
+            (let ((*world* world)
+                  (*package* (exec-package exec)))
+              (make-instance 'exec-entry
+                             :input input-text
+                             :form form
+                             :values (multiple-value-list (eval form))))
+          (error (condition)
             (make-instance 'exec-entry
+                           :input input-text
                            :form form
-                           :values (multiple-value-list (eval form))))
-        (error (condition)
-          (make-instance 'exec-entry
-                         :form form
-                         :condition condition))))))
+                           :condition condition)))))))
 
 
 (-> exec-evaluate (exec (or string cons)) exec-entry)
