@@ -452,6 +452,14 @@
    #:make-headless-backend
    #:start-desktop-session
    #:stop-desktop-session
+   #:display-error
+   #:make-wsdisplay-backend
+   #:wsdisplay-backend
+   #:wsdisplay-backend-depth
+   #:wsdisplay-backend-device
+   #:wsdisplay-backend-height
+   #:wsdisplay-backend-line-bytes
+   #:wsdisplay-backend-width
    ;; Inspector and Exec
    #:exec
    #:exec-evaluate
