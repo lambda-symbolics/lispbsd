@@ -12,6 +12,14 @@
     (sb-ext:run-program "/bin/cp"
                         '("/lispbsd/netbsd/console/rc.conf" "/etc/rc.conf")
                         :wait t :environment env :output log :error log)
+    (when (probe-file "/lispbsd/lispbsd-netbsd")
+      (sb-ext:run-program "/bin/cp" '("/netbsd" "/netbsd.previous")
+                          :wait t :environment env :output log :error log)
+      (sb-ext:run-program "/bin/cp" '("/lispbsd/lispbsd-netbsd" "/netbsd")
+                          :wait t :environment env :output log :error log)
+      (sb-ext:run-program "/bin/cp"
+                          '("/lispbsd/netbsd/console/boot.cfg" "/boot.cfg")
+                          :wait t :environment env :output log :error log))
     (sb-ext:run-program "/bin/sh" '("MAKEDEV" "vio9p0")
                         :wait t :directory #p"/dev/" :environment env
                         :output log :error log)
