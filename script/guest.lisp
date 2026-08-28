@@ -176,7 +176,14 @@ command echo cannot satisfy the wait."
                               (when (and kernel (probe-file kernel))
                                 (list (format nil "KERNEL=~A"
                                               (namestring (truename kernel)))))
-                              (sb-ext:posix-environ)))
+                              ;; Values resolved here override the inherited
+                              ;; environment; KERNEL=disk must not leak into
+                              ;; vm-run as a kernel path.
+                              (remove-if (lambda (entry)
+                                           (or (uiop:string-prefix-p "MEMORY=" entry)
+                                               (uiop:string-prefix-p "SERIAL=" entry)
+                                               (uiop:string-prefix-p "KERNEL=" entry)))
+                                         (sb-ext:posix-environ))))
          (command (append (list (namestring vm-run) (namestring image))
                           (when (and pkg-disk (probe-file pkg-disk))
                             (list "-drive"
@@ -267,7 +274,12 @@ command echo cannot satisfy the wait."
                                         (namestring (merge-pathnames
                                                      "vm/lispbsd-live.img"
                                                      root)))))
-         (kernel (guest-getenv "KERNEL" *default-kernel*))
+         (kernel (let ((value (guest-getenv "KERNEL" *default-kernel*)))
+                   ;; KERNEL=disk boots through the disk's own bootloader,
+                   ;; which can set a VESA framebuffer mode.
+                   (if (string= value "disk")
+                       nil
+                       value)))
          (memory (guest-getenv "MEMORY" "2048"))
          (host (guest-getenv "SERIAL_HOST" "127.0.0.1"))
          (port (parse-integer (guest-getenv "SERIAL_PORT" "4555")))
