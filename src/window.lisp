@@ -474,7 +474,7 @@ window. Pixels covered by any other visible window are left alone."
                                                                 shadow-x
                                                                 shadow-y)))
                                 (desktop-windows desktop)))
-               (setf (bitmap-pixel screen shadow-x shadow-y) 1))))
+               (setf (bitmap-pixel screen shadow-x shadow-y) 255))))
       (loop for shadow-y from (+ y offset) below (+ y height offset)
             do (loop for shadow-x from (+ x width) below (+ x width offset)
                      do (shadow-pixel shadow-x shadow-y)))
@@ -495,24 +495,24 @@ The title bar is drawn ink-on-paper, or inverted when FOCUSED-P."
          (height (window-height window))
          (title-height (window-title-bar-height))
          (title-bar (make-bitmap (window--content-width width) title-height
-                                 :initial-element (if focused-p 1 0))))
+                                 :initial-element (if focused-p 255 0))))
     (bitmap-draw-text title-bar *system-font* (window-title window)
-                      :x 1 :y 1 :bit (if focused-p 0 1))
+                      :x 1 :y 1 :shade (if focused-p 0 255))
     (bitblt title-bar screen :dx (+ x 1) :dy (+ y 1))
     (multiple-value-bind (box-x box-y box-size)
         (window--close-box-geometry window)
       (when box-x
-        (let ((box-bit (if focused-p 0 1)))
+        (let ((box-shade (if focused-p 0 255)))
           (bitmap-draw-rectangle screen :x (+ x box-x)
                                         :y (+ y box-y)
                                         :width box-size
                                         :height box-size
-                                        :bit box-bit)
+                                        :shade box-shade)
           (bitmap-fill screen :x (+ x box-x 3)
                               :y (+ y box-y 3)
                               :width 2
                               :height 2
-                              :bit box-bit))))
+                              :shade box-shade))))
     (bitmap-draw-line screen
                       :x0 (+ x 1) :y0 (+ y 1 title-height)
                       :x1 (+ x width -2) :y1 (+ y 1 title-height))

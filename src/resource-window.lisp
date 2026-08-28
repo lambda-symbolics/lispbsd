@@ -181,9 +181,9 @@ The menu offers inspection plus the resource's declared operations."
              (bitmap-draw-text content font text
                                :x *window-text-margin*
                                :y line-y
-                               :bit (if (= index selection)
-                                        0
-                                        1))
+                               :shade (if (= index selection)
+                                          0
+                                          255))
              (window-present window resource
                              :type ':resource
                              :x *window-text-margin*

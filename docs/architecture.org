@@ -17,8 +17,10 @@ The running system has five components with explicit interfaces:
   =runtime= protocol in =src/runtime.lisp= and =src/runtime-sbcl.lisp=.
 - The live Lisp world: =world=, =activity=, =resource=, =event=, =authority=,
   and =generation= objects in the =lispbsd= package.
-- The window system and UI backend: a canonical 1-bit logical framebuffer
-  in =src/bitmap.lisp=; windows, fonts, and display backends follow.
+- The window system and UI backend: a canonical monochrome framebuffer
+  in =src/bitmap.lisp= (grayscale shades, ink 255 on paper 0, so text
+  antialiases while the visual language stays black on white); windows,
+  fonts, and display backends follow.
 - An optional resident agent, not yet present; Autolith may later implement
   the agent protocol through an adapter.
 
@@ -29,7 +31,7 @@ The running system has five components with explicit interfaces:
 | =src/package.lisp= | Single project package =#:lispbsd= |
 | =src/types.lisp= | Shared types and identifiers |
 | =src/conditions.lisp= | Domain conditions |
-| =src/bitmap.lisp= | 1-bit bitmap, bitblt, and drawing primitives |
+| =src/bitmap.lisp= | Monochrome bitmap, bitblt, and drawing primitives |
 | =src/font.lisp= | Font and glyph protocol, built-in 8x8 font |
 | =src/truetype.lisp= | TrueType faces rasterized via zpb-ttf and cl-vectors |
 | =src/window.lisp= | Overlapping windows, desktop stacking, composition |

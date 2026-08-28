@@ -102,7 +102,7 @@ Characters without a defined image map to the font's missing glyph."))
           for row in rows
           do (loop for x from 0 below (length row)
                    when (char= (char row x) #\#)
-                     do (setf (bitmap-pixel bitmap x y) 1)))
+                     do (setf (bitmap-pixel bitmap x y) 255)))
     bitmap))
 
 
@@ -111,7 +111,7 @@ Characters without a defined image map to the font's missing glyph."))
   "Return a hollow box glyph bitmap of WIDTH by HEIGHT."
   (let ((bitmap (make-bitmap width height)))
     (bitmap-draw-rectangle bitmap :x 0 :y 0 :width width :height height)
-    (setf (bitmap-pixel bitmap (floor width 2) (floor height 2)) 1)
+    (setf (bitmap-pixel bitmap (floor width 2) (floor height 2)) 255)
     bitmap))
 
 
@@ -148,19 +148,20 @@ hollow box."
 
 
 (-> bitmap-draw-text (bitmap t string &key (:x integer) (:y integer)
-                            (:bit bit))
+                            (:shade shade))
     bitmap)
-(defun bitmap-draw-text (bitmap font string &key (x 0) (y 0) (bit 1))
+(defun bitmap-draw-text (bitmap font string &key (x 0) (y 0) (shade 255))
   "Draw STRING in FONT onto BITMAP with the line top at (X, Y).
 
-Glyphs are clipped. BIT 1 draws ink; BIT 0 draws the glyphs in paper.
-Returns BITMAP."
+Glyphs are clipped and may carry antialiased edges. SHADE 255 draws
+ink on paper; SHADE 0 draws the glyphs in paper on ink. Returns
+BITMAP."
   (let ((pen x))
     (loop for index from 0 below (length string)
           for character = (char string index)
           for glyph = (font-glyph font character)
           for glyph-x = (+ pen (glyph-offset-x glyph))
-          do (if (eql bit 1)
+          do (if (>= shade 128)
                  (bitblt (glyph-bitmap glyph) bitmap
                          :dx glyph-x :dy y :operation ':ior)
                  (let ((inverted (bitmap-copy (glyph-bitmap glyph))))

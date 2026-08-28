@@ -91,10 +91,11 @@ life of the font."
 
 (-> truetype--render-glyph (truetype-font character) glyph)
 (defun truetype--render-glyph (font character)
-  "Rasterize CHARACTER from FONT's outlines into a 1-bit glyph.
+  "Rasterize CHARACTER from FONT's outlines into an antialiased glyph.
 
-Coverage of at least half a pixel becomes ink. Characters outside the
-font's character map render as the font's notdef glyph."
+Pixel coverage becomes the glyph shade directly, so curves and stems
+keep smooth edges. Characters outside the font's character map render
+as the font's notdef glyph."
   (let* ((loader (truetype-font-loader font))
          (outline (find-glyph character loader))
          (scale (truetype-font-scale font))
@@ -114,10 +115,12 @@ font's character map render as the font's notdef glyph."
                                     :scale-y (- scale)))
     (cells-sweep state
                  (lambda (x y alpha)
-                   (when (and (<= 0 x) (< x width)
-                              (<= 0 y) (< y height)
-                              (>= (min 255 (abs alpha)) 128))
-                     (setf (aref bits y x) 1))))
+                   (let ((coverage (min 255 (abs alpha))))
+                     (when (and (<= 0 x) (< x width)
+                                (<= 0 y) (< y height)
+                                (plusp coverage))
+                       (setf (aref bits y x)
+                             (max coverage (aref bits y x)))))))
     (make-instance 'glyph
                    :bitmap bitmap
                    :advance advance

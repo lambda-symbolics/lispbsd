@@ -1,9 +1,17 @@
 (in-package #:lispbsd)
 
-;;;; -- 1-bit Bitmap --
+;;;; -- Monochrome Bitmap --
+
+(deftype shade ()
+  "A monochrome pixel shade from 0 (paper) to 255 (ink)."
+  '(unsigned-byte 8))
 
 (deftype raster-operation ()
-  "A 1-bit raster operation combining source and destination pixels."
+  "A raster operation combining source and destination shades.
+
+The operations generalize their 1-bit meanings to shades: :ior keeps
+the darker pixel, :and the lighter, :xor their difference, and the
+negations invert against full ink."
   '(member :src :ior :xor :and :not-src :clear :set :not))
 
 
@@ -13,7 +21,7 @@
     :initform nil
     :reader bitmap-error-bitmap
     :documentation "The bitmap involved in the failure, if any."))
-  (:documentation "A failure involving a 1-bit bitmap."))
+  (:documentation "A failure involving a bitmap."))
 
 
 (define-condition invalid-bitmap-size (bitmap-error)
@@ -57,21 +65,24 @@
    (bitmap-bits
     :initarg :bits
     :reader bitmap-bits
-    :documentation "Row-major 2D bit array, origin at the top left."))
+    :documentation "Row-major 2D shade array, origin at the top left."))
   (:documentation
-   "A canonical 1-bit image. Paper is 0, ink is 1."))
+   "A canonical monochrome image. Paper is 0, ink is 255.
+
+Pure black-and-white content uses only those two shades; antialiased
+edges carry the values between them."))
 
 
-(-> make-bitmap (integer integer &key (:initial-element bit)) bitmap)
+(-> make-bitmap (integer integer &key (:initial-element shade)) bitmap)
 (defun make-bitmap (width height &key (initial-element 0))
-  "Return a WIDTH by HEIGHT 1-bit bitmap filled with INITIAL-ELEMENT."
+  "Return a WIDTH by HEIGHT monochrome bitmap filled with INITIAL-ELEMENT."
   (unless (and (plusp width) (plusp height))
     (error 'invalid-bitmap-size :width width :height height))
   (make-instance 'bitmap
                  :width width
                  :height height
                  :bits (make-array (list height width)
-                                   :element-type 'bit
+                                   :element-type '(unsigned-byte 8)
                                    :initial-element initial-element)))
 
 
@@ -85,34 +96,34 @@
        t))
 
 
-(-> bitmap-pixel (bitmap integer integer) bit)
+(-> bitmap-pixel (bitmap integer integer) shade)
 (defun bitmap-pixel (bitmap x y)
-  "Return the bit at (X, Y), or 0 when the point is outside BITMAP."
+  "Return the shade at (X, Y), or 0 when the point is outside BITMAP."
   (if (bitmap-contains-point-p bitmap x y)
       (aref (bitmap-bits bitmap) y x)
       0))
 
 
-(defun (setf bitmap-pixel) (bit bitmap x y)
-  "Store BIT at (X, Y) when the point lies inside BITMAP."
-  (check-type bit bit)
+(defun (setf bitmap-pixel) (shade bitmap x y)
+  "Store SHADE at (X, Y) when the point lies inside BITMAP."
+  (check-type shade shade)
   (when (bitmap-contains-point-p bitmap x y)
-    (setf (aref (bitmap-bits bitmap) y x) bit))
-  bit)
+    (setf (aref (bitmap-bits bitmap) y x) shade))
+  shade)
 
 
-(-> raster-op (t bit bit) bit)
+(-> raster-op (t shade shade) shade)
 (defun raster-op (operation source destination)
-  "Combine SOURCE and DESTINATION bits under OPERATION."
+  "Combine SOURCE and DESTINATION shades under OPERATION."
   (ecase operation
     (:src source)
-    (:ior (logior source destination))
-    (:xor (logxor source destination))
-    (:and (logand source destination))
-    (:not-src (logxor source 1))
+    (:ior (max source destination))
+    (:xor (abs (- source destination)))
+    (:and (min source destination))
+    (:not-src (- 255 source))
     (:clear 0)
-    (:set 1)
-    (:not (logxor destination 1))))
+    (:set 255)
+    (:not (- 255 destination))))
 
 
 (-> clip-span (&key (:start integer) (:length integer) (:origin integer) (:size integer))
@@ -185,12 +196,12 @@ The transfer is clipped to both bitmaps. Returns DESTINATION."
 
 
 (-> bitmap-fill (bitmap &key (:x integer) (:y integer) (:width (option integer))
-                            (:height (option integer)) (:bit bit)
+                            (:height (option integer)) (:shade shade)
                             (:operation t))
     bitmap)
-(defun bitmap-fill (bitmap &key (x 0) (y 0) width height (bit 1)
+(defun bitmap-fill (bitmap &key (x 0) (y 0) width height (shade 255)
                     (operation ':src))
-  "Fill a rectangle of BITMAP with BIT under OPERATION. Returns BITMAP."
+  "Fill a rectangle of BITMAP with SHADE under OPERATION. Returns BITMAP."
   (unless (typep operation 'raster-operation)
     (error 'unknown-raster-operation :operation operation :bitmap bitmap))
   (let ((fill-width (or width (bitmap-width bitmap)))
@@ -208,21 +219,21 @@ The transfer is clipped to both bitmaps. Returns DESTINATION."
               (let ((dest-x (+ clipped-x column))
                     (dest-y (+ clipped-y row)))
                   (setf (aref bits dest-y dest-x)
-                        (raster-op operation bit (aref bits dest-y dest-x))))))))))
+                        (raster-op operation shade (aref bits dest-y dest-x))))))))))
     bitmap)
 
 
 (-> bitmap-clear (bitmap) bitmap)
 (defun bitmap-clear (bitmap)
   "Fill BITMAP with paper and return it."
-  (bitmap-fill bitmap :bit 0 :operation ':src))
+  (bitmap-fill bitmap :shade 0 :operation ':src))
 
 
 (-> bitmap-draw-line (bitmap &key (:x0 integer) (:y0 integer) (:x1 integer)
-                                 (:y1 integer) (:bit bit))
+                                 (:y1 integer) (:shade shade))
     bitmap)
-(defun bitmap-draw-line (bitmap &key (x0 0) (y0 0) (x1 0) (y1 0) (bit 1))
-  "Draw a 1-pixel-thick line from (X0, Y0) to (X1, Y1) in BIT. Returns BITMAP."
+(defun bitmap-draw-line (bitmap &key (x0 0) (y0 0) (x1 0) (y1 0) (shade 255))
+  "Draw a 1-pixel line from (X0, Y0) to (X1, Y1) in SHADE. Returns BITMAP."
   (let* ((dx (abs (- x1 x0)))
          (dy (abs (- y1 y0)))
          (sx (if (< x0 x1) 1 -1))
@@ -231,7 +242,7 @@ The transfer is clipped to both bitmaps. Returns DESTINATION."
          (x x0)
          (y y0))
     (loop
-      (setf (bitmap-pixel bitmap x y) bit)
+      (setf (bitmap-pixel bitmap x y) shade)
       (when (and (= x x1) (= y y1))
         (return))
       (let ((e2 (* 2 err)))
@@ -246,18 +257,18 @@ The transfer is clipped to both bitmaps. Returns DESTINATION."
 
 (-> bitmap-draw-rectangle (bitmap &key (:x integer) (:y integer)
                                       (:width integer) (:height integer)
-                                      (:bit bit))
+                                      (:shade shade))
     bitmap)
 (defun bitmap-draw-rectangle (bitmap &key (x 0) (y 0) (width 1) (height 1)
-                             (bit 1))
+                             (shade 255))
   "Draw a 1-pixel outline rectangle. Returns BITMAP."
   (when (and (plusp width) (plusp height))
     (let ((x1 (+ x width -1))
           (y1 (+ y height -1)))
-      (bitmap-draw-line bitmap :x0 x :y0 y :x1 x1 :y1 y :bit bit)
-      (bitmap-draw-line bitmap :x0 x :y0 y1 :x1 x1 :y1 y1 :bit bit)
-      (bitmap-draw-line bitmap :x0 x :y0 y :x1 x :y1 y1 :bit bit)
-      (bitmap-draw-line bitmap :x0 x1 :y0 y :x1 x1 :y1 y1 :bit bit)))
+      (bitmap-draw-line bitmap :x0 x :y0 y :x1 x1 :y1 y :shade shade)
+      (bitmap-draw-line bitmap :x0 x :y0 y1 :x1 x1 :y1 y1 :shade shade)
+      (bitmap-draw-line bitmap :x0 x :y0 y :x1 x :y1 y1 :shade shade)
+      (bitmap-draw-line bitmap :x0 x1 :y0 y :x1 x1 :y1 y1 :shade shade)))
   bitmap)
 
 
@@ -276,7 +287,7 @@ The transfer is clipped to both bitmaps. Returns DESTINATION."
          (string (make-string width)))
     (dotimes (x width)
       (setf (char string x)
-            (if (plusp (bitmap-pixel bitmap x y)) #\# #\.)))
+            (bitmap--shade-character (bitmap-pixel bitmap x y))))
     string))
 
 
@@ -292,7 +303,16 @@ The transfer is clipped to both bitmaps. Returns DESTINATION."
           collect (let ((string (make-string region-width)))
                     (dotimes (column region-width)
                       (setf (char string column)
-                            (if (plusp (bitmap-pixel bitmap (+ x column) row))
-                                #\#
-                                #\.)))
+                            (bitmap--shade-character
+                             (bitmap-pixel bitmap (+ x column) row))))
                     string))))
+
+(-> bitmap--shade-character (shade) character)
+(defun bitmap--shade-character (shade)
+  "Return the ASCII picture character for SHADE: ink, paper, or gray."
+  (cond ((zerop shade)
+         #\.)
+        ((= shade 255)
+         #\#)
+        (t
+         #\+)))

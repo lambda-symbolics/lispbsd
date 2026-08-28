@@ -190,7 +190,7 @@ suspended activity and closing the window. Returns BREAK-WINDOW."))
                (bitmap-draw-text content font text
                                  :x *window-text-margin*
                                  :y line-y
-                                 :bit (if inverted-p 0 1)))
+                                 :shade (if inverted-p 0 255)))
              (incf row)))
       (let ((*print-length* *window-print-length*)
             (*print-level* *window-print-level*))

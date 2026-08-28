@@ -166,7 +166,7 @@ visible."
                      (bitmap-draw-text content font text
                                        :x *window-text-margin*
                                        :y line-y
-                                       :bit 0))
+                                       :shade 0))
                    (bitmap-draw-text content font text
                                      :x *window-text-margin*
                                      :y line-y)))))

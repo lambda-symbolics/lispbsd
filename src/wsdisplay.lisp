@@ -149,10 +149,9 @@ DISPLAY-ERROR."
     (dotimes (y height)
       (let ((row-offset (* y line-bytes)))
         (dotimes (x width)
-          (setf (sb-sys:sap-ref-32 framebuffer (+ row-offset (* x 4)))
-                (if (plusp (aref bits y x))
-                    #x00000000
-                    #x00FFFFFF)))))
+          (let ((gray (- 255 (aref bits y x))))
+            (setf (sb-sys:sap-ref-32 framebuffer (+ row-offset (* x 4)))
+                  (logior (ash gray 16) (ash gray 8) gray))))))
     bitmap))
 
 (defmethod display-backend-poll-events ((backend wsdisplay-backend))

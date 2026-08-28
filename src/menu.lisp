@@ -153,7 +153,7 @@ choice is made or the pointer is pressed outside it."
                         :y y
                         :width (menu-width menu)
                         :height (menu-height menu)
-                        :bit 0)
+                        :shade 0)
     (bitmap-draw-rectangle screen :x x
                                   :y y
                                   :width (menu-width menu)
@@ -169,7 +169,7 @@ choice is made or the pointer is pressed outside it."
              (bitmap-draw-text screen font (menu-item-label item)
                                :x (+ x 1 *window-text-margin*)
                                :y line-y
-                               :bit (if (= index (menu-selection menu))
-                                        0
-                                        1)))
+                               :shade (if (= index (menu-selection menu))
+                                          0
+                                          255)))
     screen))

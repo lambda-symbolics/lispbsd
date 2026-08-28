@@ -67,12 +67,15 @@
    #:bitmap-height
    #:bitmap-pixel
    #:bitmap-read-pbm
+   #:bitmap-read-pgm
    #:bitmap-row-string
    #:bitmap-width
    #:bitmap-write-pbm
+   #:bitmap-write-pgm
    #:bitblt
    #:make-bitmap
    #:raster-operation
+   #:shade
    ;; Font
    #:*fixed-font*
    #:art->glyph

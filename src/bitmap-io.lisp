@@ -22,8 +22,8 @@
 (defun bitmap-write-pbm (bitmap path)
   "Write BITMAP to PATH as a binary PBM (P4) image. Returns the true pathname.
 
-PBM marks ink as 1, matching the bitmap convention. Rows are packed
-most significant bit first and padded to whole bytes."
+Shades of at least half ink become 1. Rows are packed most significant
+bit first and padded to whole bytes."
   (with-open-file (stream path :direction ':output
                                :element-type '(unsigned-byte 8)
                                :if-exists ':supersede
@@ -41,7 +41,7 @@ most significant bit first and padded to whole bytes."
             (dotimes (bit-index 8)
               (let ((x (+ (* byte-index 8) bit-index)))
                 (when (and (< x width)
-                           (plusp (aref bits y x)))
+                           (>= (aref bits y x) 128))
                   (setf byte (logior byte (ash 1 (- 7 bit-index)))))))
             (write-byte byte stream))))))
   (truename path))
@@ -103,12 +103,84 @@ INVALID-BITMAP-FILE for malformed or truncated files."
                 (let ((x (+ (* byte-index 8) bit-index)))
                   (when (< x width)
                     (setf (aref bits y x)
-                          (ldb (byte 1 (- 7 bit-index)) byte))))))))
+                          (* 255 (ldb (byte 1 (- 7 bit-index)) byte)))))))))
+        bitmap))))
+
+
+(-> bitmap-write-pgm (bitmap (or pathname string)) pathname)
+(defun bitmap-write-pgm (bitmap path)
+  "Write BITMAP to PATH as a binary PGM (P5) image with full shades.
+
+PGM's 255 is white, so shades are inverted on the way out: ink writes
+as 0 and paper as 255. Returns the true pathname."
+  (with-open-file (stream path :direction ':output
+                               :element-type '(unsigned-byte 8)
+                               :if-exists ':supersede
+                               :if-does-not-exist ':create)
+    (let* ((width (bitmap-width bitmap))
+           (height (bitmap-height bitmap))
+           (header (format nil "P5~%~A ~A~%255~%" width height))
+           (bits (bitmap-bits bitmap)))
+      (loop for character across header
+            do (write-byte (char-code character) stream))
+      (dotimes (y height)
+        (dotimes (x width)
+          (write-byte (- 255 (aref bits y x)) stream)))))
+  (truename path))
+
+
+(-> bitmap-read-pgm ((or pathname string)) bitmap)
+(defun bitmap-read-pgm (path)
+  "Read a binary PGM (P5) image from PATH into a fresh bitmap.
+
+Gray values are inverted back into shades: 0 reads as full ink."
+  (with-open-file (stream path :direction ':input
+                               :element-type '(unsigned-byte 8))
+    (labels ((malformed (reason)
+               (error 'invalid-bitmap-file :path path :reason reason))
+
+             (next-byte ()
+               (let ((byte (read-byte stream nil nil)))
+                 (unless byte
+                   (malformed "truncated file"))
+                 byte))
+
+             (whitespace-byte-p (byte)
+               (and (member byte '(9 10 13 32)) t))
+
+             (read-number ()
+               (let ((byte (next-byte))
+                     (value 0))
+                 (loop while (whitespace-byte-p byte)
+                       do (setf byte (next-byte)))
+                 (unless (<= 48 byte 57)
+                   (malformed "expected a decimal number"))
+                 (loop while (<= 48 byte 57)
+                       do (setf value (+ (* value 10) (- byte 48)))
+                          (setf byte (next-byte)))
+                 (unless (whitespace-byte-p byte)
+                   (malformed "expected whitespace after a number"))
+                 value)))
+      (unless (and (= (next-byte) (char-code #\P))
+                   (= (next-byte) (char-code #\5)))
+        (malformed "not a binary PGM (P5) file"))
+      (let* ((width (read-number))
+             (height (read-number))
+             (maximum (read-number))
+             (bitmap (make-bitmap width height))
+             (bits (bitmap-bits bitmap)))
+        (unless (= maximum 255)
+          (malformed "unsupported gray range"))
+        (dotimes (y height)
+          (dotimes (x width)
+            (setf (aref bits y x) (- 255 (next-byte)))))
         bitmap))))
 
 
 (-> desktop-screenshot (desktop (or pathname string)) pathname)
 (defun desktop-screenshot (desktop path)
-  "Compose DESKTOP and write its screen to PATH as a PBM image."
+  "Compose DESKTOP and write its screen to PATH as a PGM image.
+
+PGM carries the full shade range, so antialiased edges survive."
   (desktop-compose desktop)
-  (bitmap-write-pbm (desktop-screen desktop) path))
+  (bitmap-write-pgm (desktop-screen desktop) path))
