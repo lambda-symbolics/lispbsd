@@ -11,6 +11,7 @@
 # when set, is a QEMU serial backend (for example tcp:127.0.0.1:4555,server,nowait)
 # and the display is switched off so the console can be driven by a client.
 # VIRTFS is a host directory exported as virtio-9p; VIRTFS_TAG is the mount tag.
+# MONITOR_PORT exposes the QEMU monitor on 127.0.0.1 for screendumps.
 set -eu
 
 IMAGE=${1:?usage: script/vm-run image [qemu arguments...]}
@@ -22,6 +23,7 @@ MEMORY=${MEMORY:-1024}
 SERIAL=${SERIAL:-}
 VIRTFS=${VIRTFS:-}
 VIRTFS_TAG=${VIRTFS_TAG:-host}
+MONITOR_PORT=${MONITOR_PORT:-4556}
 
 if [ -n "$SERIAL" ]; then
     set -- -display none -serial "$SERIAL" "$@"
@@ -44,4 +46,5 @@ exec qemu-system-x86_64 \
     -m "$MEMORY" \
     -drive "file=$IMAGE,format=raw" \
     -no-reboot \
+    -monitor "tcp:127.0.0.1:$MONITOR_PORT,server,nowait" \
     "$@"
